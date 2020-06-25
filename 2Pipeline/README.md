@@ -1,2 +1,5 @@
-# Liu2020ProteinCell
-Pipeline &amp; Reproducible analysis examples for amplicon and metagenome in microbiome
+# Pipeline
+
+- Amplicon: amplicon_pipeline.sh
+- Metagenome: metagenome_pipeline.sh
+- Metagenome software and database: metagenome_soft_db.sh
