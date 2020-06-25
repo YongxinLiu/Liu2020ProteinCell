@@ -1,650 +1,978 @@
-# ä¸€ã€æ‰©å¢å­æœ‰å‚åˆ†ææµç¨‹ 16S Amplicon Pipeline -- Reference-based 
-
-# ç³»ç»Ÿè¦æ±‚ System: Windows 10 / Linux Ubuntu 18.04
-# ä¾èµ–è½¯ä»¶ Sofware: usearch, vsearch2.8, R3.4 and Rstudio1.1, gitforwidnows(ä»…win10éœ€è¦)
-# é¢„æµ‹å®åŸºå› ç»„éƒ¨åˆ†éœ€è¦ picurst + greengene13.5æ•°æ®åº“
-
-# è¿è¡Œå‰å‡†å¤‡
-# 1. æŒ‰7softwareç›®å½•ä¸­è¯¾ä»¶è¯´æ˜å®‰è£…ä¾èµ–è½¯ä»¶å¹¶æ·»åŠ ç¯å¢ƒå˜é‡
-# 2. å­¦å‘˜Uç›˜å¤åˆ¶æµ‹åºæ•°æ®2ampliconç›®å½•åˆ°C:æˆ–æœåŠ¡å™¨~ç›®å½•
-# 3. Rstudioæ‰“å¼€2amplicon/pipeline_reference.shæ–‡ä»¶ï¼ŒTerminalä¸­åˆ‡æ¢è‡³å·¥ä½œç›®å½•
-
-## Windowsç”¨æˆ·ï¼šåˆ‡æ¢è‡³å·¥ä½œç›®å½•
-# cd /c/2amplicon
-
-# LinuxæœåŠ¡å™¨
-# ç”¨æˆ·ç™»é™†Rstudioç½‘é¡µç‰ˆï¼šå†…ç½‘ 192.168.1.107:8787ï¼Œå¤–ç½‘ 210.75.224.32:8787 è¿›è¡Œç»ƒä¹ 
-# mkdir 2amplicon # å»ºç«‹é¡¹ç›®ç›®å½•
-# cd 2amplicon/ # è¿›å…¥å·¥ä½œç›®å½•
-# ln -s /db/2amplicon/pipeline_reference.sh ./ # é“¾æ¥æµç¨‹è‡³å·¥ä½œç›®å½•ï¼Œä¿æŒæ›´æ–°
-# å³ä¾§æ‰“å¼€æµç¨‹æ–‡ä»¶ï¼Œé“¾æ¥æ— æƒé™ä¿®æ”¹ï¼Œä¿å­˜æ—¶ä¼šå¼¹å‡ºå¦å­˜å³å¯
-
-# 1. äº†è§£å·¥ä½œç›®å½•å’Œæ–‡ä»¶
-
-# ç›®å½•ï¼šæ–‡ä»¶å½’ç±»æ€æƒ³
-# è¿›å…¥æ‰©å¢å­åˆ†æçš„å·¥ä½œç›®å½• 2amplicon
-mkdir -p seq # åŸå§‹æ•°æ® raw data
-ln -s /db/2amplicon/seq/* ./seq
-mkdir -p doc # å®éªŒè®¾è®¡åŠç›¸å…³æ–‡æ¡£ design / metadata
-ln -s /db/2amplicon/doc/* ./doc
-mkdir -p temp # ä¸´æ—¶æ–‡ä»¶ temp directory for intermediate files
-mkdir -p gg # ä»¥greengene13.5ä¸ºå‚è€ƒæ•°æ®åº“çš„ç»“æœç›®å½•
-
-# æ–‡ä»¶è¯´æ˜
-
-# pipeline*.sh åˆ†æä¸»æµç¨‹
-
-# seq/*.fq åŸå§‹æµ‹åºæ•°æ®ï¼Œå…¬å¸è¿”å›çš„æµ‹åºç»“æœï¼Œé€šå¸¸ä¸ºä¸€ä¸ªæ ·å“ä¸€å¯¹fastqæ ¼å¼æ–‡ä»¶
-# å¦‚æœæµ‹åºæ•°æ®æ˜¯.gzç»“å°¾çš„å‹ç¼©æ–‡ä»¶ï¼Œä½¿ç”¨gunzipè§£å‹
-# gunzip seq/*
-head -n4 seq/KO1_1.fq
-
-# doc/design.txt å®éªŒè®¾è®¡æ–‡ä»¶
-head -n3 doc/design.txt
-
-# /db/gg/*.fa  Greengene16Sæ•°æ®åº“
-# greengene 13_8: ftp://greengenes.microbio.me/greengenes_release/gg_13_5/gg_13_8_otus.tar.gz
-head -n2 /db/gg/97_otus.fasta
-head -n2 /db/gg/97_otu_taxonomy.txt
-
-# 2. åˆå¹¶åŒç«¯åºåˆ—ä¸æ ·å“æ ‡ç­¾ Merge paired reads and label samples
-
-# ä»¥WT1å•æ ·å“åˆå¹¶ä¸ºä¾‹
-vsearch -fastq_mergepairs seq/WT1_1.fq -reverse seq/WT1_2.fq \
-	-fastqout temp/WT1.merged.fq \
-	-relabel WT1. # 1S, 63Mb
-
-# ä¾ç…§å®éªŒè®¾è®¡æ‰¹å¤„ç†å¹¶åˆå¹¶
-# rstudioä¸­è¿è¡Œä¼šå¼‚å¸¸ä¸­æ–­ï¼Œä¸­é€”ç°Ctrl+Cï¼Œæ˜¯å…¶å®ƒè½¯ä»¶å¦‚è¯å…¸å¼•èµ·
-for i in `tail -n+2 doc/design.txt | cut -f 1`;do
-  vsearch --fastq_mergepairs seq/${i}_1.fq --reverse seq/${i}_2.fq \
-  --fastqout temp/${i}.merged.fq --relabel ${i}. &
-done
-# åˆå¹¶æ‰€æœ‰æ ·å“è‡³åŒä¸€æ–‡ä»¶
-cat temp/*.merged.fq > temp/all.fq
-ls -l temp/all.fq # 660 Mb
-# åˆ é™¤ä¸­é—´æ–‡ä»¶
-rm temp/*.merged.fq
-# å‹ç¼©åŸå§‹æ–‡ä»¶èŠ‚çœç©ºé—´
-# gzip seq/*
-
-# 3. åˆ‡é™¤å¼•ç‰©ä¸è´¨æ§ Cut primers and quality filter
-# Cut barcode 10bp + V5 19bp in left and V7 18bp in right
-vsearch --fastx_filter temp/all.fq \
-  --fastq_stripleft 29 --fastq_stripright 18 \
-  --fastqout temp/stripped.fq
-# 10S, 39Mb
-
-# è´¨é‡æ§åˆ¶fastq filter, keep reads error rates less than 1%
-vsearch --fastx_filter temp/stripped.fq \
-  --fastq_maxee_rate 0.01 \
-  --fastaout temp/filtered.fa
-# 16S, 6Mb
-
-
-# 4. æœ‰å‚æ¯”å¯¹ï¼Œå¦‚Greengenesï¼Œå¯ç”¨äºpicurst, stamp
-
-# ç”ŸæˆOTUè¡¨ Create OTUs table
-vsearch --usearch_global temp/filtered.fa \
-  --db /db/gg/97_otus.fasta \
-  --id 0.97 \
-  --otutabout gg/otutab.txt --threads 9
-
-# ä¸GGæ‰€æœ‰97% OTUsæ¯”å¯¹ï¼Œi5ç¬”è®°æœ¬4çº¿ç¨‹ç”¨æ—¶17:42ï¼Œå†…å­˜729Mb
-usearch -otutab_stats gg/otutab.txt \
-	-output gg/otutab.stat 
-cat gg/otutab.stat 
-
-# æ¥ä¸‹æ¥çš„ä¸»æˆåˆ†ã€ç‰©ç§ã€ç»„é—´æ¯”è¾ƒï¼Œå¯ç”¨STAMPï¼Œæˆ–åŸºäºæ— å‚çš„Rè„šæœ¬æ–¹æ³•
-
-
-# 5. æ•´ç†ç»“æœï¼šOTUè¡¨ã€ä»£è¡¨åºåˆ—å’Œç‰©ç§æ³¨é‡Šï¼Œç”ŸæˆSTAMPã€lefseè¾“å…¥æ–‡ä»¶
-
-# ç®€åŒ–åˆ†ç»„ä¿¡æ¯ï¼ŒåŒç›®å½•æ–¹ä¾¿ä½¿ç”¨
-cut -f 1,5-7 doc/design.txt > gg/metadata.txt 
-
-# ç­›é€‰é«˜ä¸°åº¦OTUï¼Œå…³æ³¨é‡ç‚¹ï¼Œå‡å°‘è®¡ç®—é‡ï¼Œé™ä½FDRæ ¡æ­£æ•ˆåº”ï¼Œè·å–äººç±»å¯è¯»é‡çš„ç»“æœï¼Œæ¨èHiSeqé€‰ä¸‡1ï¼Œå¯é€‰åƒ1ï¼Œåä¸‡1
-usearch -otutab_trim gg/otutab.txt -min_otu_freq 0.0001 -output temp/otutab_trim.txt
-usearch -otutab_stats temp/otutab_trim.txt -output temp/otutab_trim.stat 
-cat temp/otutab_trim.stat
-# 566487 / 615803 = 91.2% reads, 903 / 6740 = 13.4% çš„é«˜ä¸°åº¦OTUs
-
-# OTUè¡¨ï¼šåˆ é™¤#å’Œç©ºæ ¼ï¼Œåºåˆ—å‰æ·»åŠ å­—æ¯ï¼Œçº¯æ•°å­—è¡Œ/åˆ—åç§°è½¯ä»¶å’ŒRè¯­è¨€å®¹æ˜“æŠ¥é”™
-sed '1 s/#OTU //;s/^/S/' temp/otutab_trim.txt > gg/otutab.spf
-
-# è·å–OTUså’Œç‰©ç§æ³¨é‡Š
-cut -f 1 gg/otutab.txt | tail -n+2 > temp/otu.id
-usearch -fastx_getseqs /db/gg/97_otus.fasta -labels temp/otu.id -fastaout gg/otu.fa
-awk 'BEGIN{OFS=FS="\t"} NR==FNR{a[$1]=$2} NR>FNR{print $1,a[$1]}' \
-  /db/gg/97_otu_taxonomy.txt temp/otu.id > gg/otu.tax
-sed 's/; /\t/g' gg/otu.tax | sed '1 i ID\tKingdom\tPhylum\tClass\tOrder\tFamily\tGenus\tSpecies' > gg/otu.tax8
-
-# Linuxä¸‹è®¡ç®—å„åˆ†ç±»çº§æ±‡æ€»è¡¨ï¼Œç”¨äºstampå’Œlefseç»Ÿè®¡
-Rscript ../6script/taxonomy_summary.R
-# Windowsä¸‹éœ€è¦ä½¿ç”¨Rstudioæ‰“å¼€è„šæœ¬ï¼Œè®¾ç½®å·¥ä½œç›®å½•ï¼Œå…¨é€‰è¿è¡Œ
-wc -l gg/tax_sum* # å„çº§æ•°é‡
-# å¯ç›´æ¥stampç»Ÿè®¡åˆ†æï¼Œæˆ–ç”¨Rç»˜åˆ¶å †å æŸ±çŠ¶å›¾
-# stampæ‹‰å¼€otuè¡¨å’Œmetadataï¼Œé»˜è®¤å¤šç»„æ¯”è¾ƒæŸ¥çœ‹pca, heatmap, barplot, boxplotï¼Œå¯¼å‡ºå·®å¼‚; ä¸¤ç»„æ¯”è¾ƒï¼ŒExtended error bar, bar/box
-
-
-# 6. Rè„šæœ¬å·®å¼‚åˆ†æåŠå¯è§†åŒ–
-
-## 6.1 Alphaå¤šæ ·æ€§ Alpha diversity
-# Calculate all alpha diversity, details in http://www.drive5.com/usearch/manual/alpha_metrics.html
-mkdir -p gg/alpha
-# æ ·å“æŠ½å¹³è‡³æœ€å°å€¼ï¼Œæ‰èƒ½è¯„ä¼°alphaå¤šæ ·æ€§
-usearch10 -otutab_norm gg/otutab.txt \
-	-sample_size 30000 \
-	-output gg/otutab_norm.txt 
-# è®¡ç®—15ç§å¤šæ ·æ€§æŒ‡æ•°
-usearch -alpha_div gg/otutab_norm.txt \
-  -output gg/alpha/index.txt 
-# ç¨€é‡Šæ›²çº¿ï¼šå–1%-100%çš„åºåˆ—ä¸­OTUsæ•°é‡ Rarefaction from 1%, 2% .. 100% in richness (observed OTUs)-method fast / with_replacement / without_replacement https://drive5.com/usearch/manual/cmd_otutab_subsample.html
-usearch -alpha_div_rare gg/otutab_norm.txt \
-  -output gg/alpha/rare.txt -method without_replacement # 9s, 6.8Mb
-
-# æ˜¾ç¤ºè„šæœ¬å¸®åŠ©
-Rscript ../6script/alpha_boxplot.R -h
-
-# é»˜è®¤ç”»richness
-Rscript ../6script/alpha_boxplot.R
-
-# ç»˜åˆ¶ç®±çº¿å›¾+å·®å¼‚ç»Ÿè®¡ï¼Œæ–¹æ³•å¯é€‰richness, chao1ï¼Œshannon_eç­‰ï¼Œè¯¦è§head -n1 gg/alpha/index.txt
-Rscript ../6script/alpha_boxplot.R -i gg/alpha/index.txt \
-  -d doc/design.txt -n group -t richness \
-  -o gg/alpha/richness \
-  -w 4 -e 2.5 
-
-# ç»˜åˆ¶chao1
-Rscript ../6script/alpha_boxplot.R -t chao1 
-  
-# ç»˜åˆ¶ç¨€é‡Šæ›²çº¿
-Rscript ../6script/alpha_rarefaction_curve.R -i gg/alpha/rare.txt \
-  -d doc/design.txt -n group \
-  -o gg/alpha/rare_ \
-  -w 4 -e 2.5 
-# Windowsä¸­ä½¿ç”¨Rstudioæ‰“å¼€ï¼Œè®¾ç½®é¡¹ç›®å·¥ä½œç›®å½•ï¼Œå¹¶ä¿®æ”¹è¾“å…¥è¾“å‡ºæ–‡ä»¶åï¼Œè¿è¡Œå³å¯
-
-
-# 6.2 Betaå¤šæ ·æ€§ Beta diversity
-# ç»“æœæœ‰å¤šä¸ªæ–‡ä»¶ï¼Œéœ€è¦ç›®å½•
-mkdir -p gg/beta/ 
-# åŸºäºOTUæ„å»ºè¿›åŒ–æ ‘ Make OTU tree
-usearch -cluster_agg gg/otu.fa -treeout gg/beta/otu.tree
-# å…¨é•¿å»ºæ ‘æ¯”è¾ƒæ…¢ï¼Œ10çº¿ç¨‹ 06:29 613Mb
-# ç”Ÿæˆ5ç§è·ç¦»çŸ©é˜µï¼šbray_curtis, euclidean, jaccard, manhatten, unifrac
-usearch -beta_div gg/otutab.txt -tree gg/beta/otu.tree \
-  -filename_prefix gg/beta/
-
-# å®Œæ•´é»˜è®¤å‚æ•°
-Rscript ../6script/beta_pcoa.R -i gg/beta/bray_curtis.txt -t bray_curtis \
-  -d doc/design.txt -n group \
-  -o gg/beta/pcoa_bray_curtis \
-  -w 4 -e 2.5 
-# åŸºäºunifracè·ç¦»
-Rscript ../6script/beta_pcoa.R -t unifrac
-
-# é™åˆ¶æ€§PCoA / CCAï¼Œæ‰¾åˆ†ç»„é—´æœ€å¤§å·®å¼‚ï¼Œè·ç¦»tç±»å‹,å¯é€‰manhattan, euclidean, canberra, bray, kulczynski, jaccard, gower, altGower, morisita, horn, mountford, raup , binomial, chao, cao or mahalanobis
-Rscript ../6script/beta_cpcoa.R -i gg/otutab_norm.txt -t bray \
-  -d doc/design.txt -n group \
-  -o gg/beta/cpcoa_bray
-# æ¥ä¸€ä¸ªæ¬§å¼è·ç¦»è¯•è¯•
-Rscript ../6script/beta_cpcoa.R -t euclidean
+[TOC]
+
+#!/bin/bash
+    # ×÷Õß Authors: Yong-Xin Liu, Tong Chen, Xin Zhou, Tao Wen, Liang Chen, ...
+    # °æ±¾ Version: v1.70
+    # ¸üĞÂ Update: 2020-01-03
+
+    # ÉèÖÃÈí¼ş/Êı¾İ¿â(database,db)ºÍ¹¤×÷Ä¿Â¼(work directory,wd)²¢½øÈëwd
+    # **Ã¿´Î´ò¿ªRstudio±ØĞëÔËĞĞÏÂÃæ3ĞĞ**
+    db=/c/public
+    wd=/c/amplicon
+    cd ${wd}
+
+
+# 22¡¢À©Ôö×Ó·ÖÎöÁ÷³Ì 16S Amplicon pipeline
+
+    # ÏµÍ³ÒªÇó System requirement: Windows 10 / Mac OS 10.12+ / Ubuntu 18.04
+    # ÒÀÀµÈí¼şºÍÊı¾İ Sofware and database dependencies: ¸´ÖÆpublicÄ¿Â¼µ½CÅÌ
+    # gitforwidnows 2.23.0 http://gitforwindows.org/(Windows only)
+    # R 3.6.1 https://www.r-project.org/
+    # Rstudio 1.2.5019 https://www.rstudio.com/products/rstudio/download/#download
+    # vsearch v2.14.1 https://github.com/torognes/vsearch/releases
+    # usearch v10.0.240 https://www.drive5.com/usearch/download.html
+
+    # ÔËĞĞÇ°×¼±¸
+    # 1. ½«ampliconºÍpublicÄ¿Â¼¸´ÖÆµ½CÅÌ(C:/) »ò Mac/Linux·şÎñÆ÷¼ÒÄ¿Â¼(~/)
+    # 2. Ñ§Ô±°´UÅÌ`01PPT/11À©Ôö×ÓÈí¼ş°²×°ºÍ²âÊÔÊÖ²á.pdf`¿Î¼şËµÃ÷°²×°Èí¼ş
+    # 3. ±¾½ÚÖÁÉÙ°üÀ¨²âĞòÊı¾İseq/*.fq.gz¡¢Ñù±¾ÔªÊı¾İresult/metadata.tsvºÍÁ÷³Ì½Å±¾pipeline.sh
+    # 3. Rstudio´ò¿ªpipeline.shÎÄ¼ş£¬ÉèÖÃÄ¬ÈÏÄ¿Â¼ÎªC:/amplicon »ò TerminalÇĞ»»ÖÁ¹¤×÷Ä¿Â¼
+    # Linux·şÎñÆ÷ÓÃ»§Chrome·ÃÎÊ'IPµØÖ·:8787'µÇÂ½RstudioÍøÒ³°æ£¬Ñ¡ÖĞ´úÂë°´Ctrl+Shift+CÇĞ»»×¢ÊÍ
+
 
-## 6.3 ç‰©ç§ä¸°åº¦æŸ±çŠ¶å›¾ Taxonomy barplot
+## 1. ÁË½â¹¤×÷Ä¿Â¼ºÍÆğÊ¼ÎÄ¼ş
+
+    #1. Ô­Ê¼²âĞòÊı¾İ±£´æÓÚseqÄ¿Â¼£¬Í¨³£ÒÔ`.fq.gz`½áÎ²£¬Ã¿¸öÑùÆ·Ò»¶ÔÎÄ¼ş
+    mkdir -p seq
+    ls -lsh seq
+    #2. Ñù±¾ĞÅÏ¢£¬¼´ÊµÑéÉè¼Æ metadata.tsv£¬±£´æÔÚ×îÖÕ½á¹ûresultÄ¿Â¼
+    mkdir -p result
+    #3. ·ÖÎöÁ÷³Ìpipeline.sh£¬Ã¿¸öÏîÄ¿¸´ÖÆÒ»·İ£¬ÔÙ½øĞĞ¸öĞÔ»¯ĞŞ¸Ä
+    #4. ´´½¨ÁÙÊ±ÎÄ¼ş´æ´¢Ä¿Â¼£¬·ÖÎö½áÊø¿ÉÉ¾³ı
+    mkdir -p temp
+
+### 1.1. metadata.tsv ÊµÑéÉè¼ÆÎÄ¼ş
 
-mkdir -p gg/tax/ 
+    #cat²é¿´Ç°3ĞĞ£¬-AÏÔÊ¾·ûºÅ
+    cat -A result/metadata.tsv | head -n3
+    #windowsÓÃ»§Èç¹û½áÎ²ÓĞ^M£¬ÔËĞĞsedÃüÁîÈ¥³ı£¬²¢cat -A¼ì²é½á¹û
+    # sed -i 's/\r/\n/' result/metadata.tsv
+    # cat -A result/metadata.tsv | head -n3
+
+### 1.2. seq/*.fq.gz Ô­Ê¼²âĞòÊı¾İ
+
+    # ¹«Ë¾·µ»ØµÄ²âĞò½á¹û£¬Í¨³£ÎªÒ»¸öÑùÆ·Ò»¶Ôfq/fastq.gz¸ñÊ½Ñ¹ËõÎÄ¼ş
+    # ÎÄ¼şÃûÓëÑùÆ·ÃûÎñ±Ø¶ÔÓ¦£º²»Ò»ÖÂÊ±ÉÙÁ¿¿ÉÊÖ¹¤ÖØÃüÃû£¬»ò´úÂëÅúÁ¿¸ÄÃû²Î¼û`³£¼ûÎÊÌâ`6£»Èí¼şÅúÁ¿¸ÄÃûÍÆ¼ö https://github.com/shenwei356/brename
+    # zless°´Ò³²é¿´Ñ¹ËõÎÄ¼ş£¬Êó±êµãÏÂ·½´úÂëÇø£¬¿Õ¸ñ·­Ò³¡¢qÍË³ö£¬×¢ÒâÊäÈë·¨±£³ÖÓ¢ÎÄ×´Ì¬
+    # zless seq/KO1_1.fq.gz
+    # Èç¹û²âĞòÊı¾İÊÇ.gzµÄÑ¹ËõÎÄ¼ş£¬Ê¹ÓÃgunzip½âÑ¹£¬21s
+    time gunzip seq/*.gz
+    # less°´Ò³²é¿´£¬¿Õ¸ñ·­Ò³¡¢qÍË³ö£»head²é¿´Ç°10ĞĞ£¬-nÖ¸¶¨ĞĞ
+    ls seq/
+    head -n4 seq/KO1_1.fq
+    # cut -c 1-60 seq/KO1_1.fq | head -n4
+
+### 1.3. pipeline.sh Á÷³ÌÒÀÀµÊı¾İ¿â
+
+    # Êı¾İ¿âµÚÒ»´ÎÊ¹ÓÃ±ØĞë½âÑ¹£¬½âÑ¹¹ı¿ÉÌø¹ı´Ë¶Î
+
+    # usearchÊ¹ÓÃ16SÊı¾İ¿â£º RDP, SILVA and UNITE£¬±¾µØÎÄ¼şÎ»ÖÃ ${db}/usearch/
+    # usearchÊı¾İ¿âdatabaseÏÂÔØÒ³: http://www.drive5.com/sintax
+    # ½âÑ¹rdpÓÃÓÚÎïÖÖ×¢ÊÍºÍsilvaÓÃÓÚÈ¥Ç¶ºÏÌå£¬*´ú±íÈÎÒâ×Ö·û£¬Ñ¡ÔñÒÔfa.gz½áÎ²µÄÎÄ¼ş
+    time gunzip ${db}/usearch/*.fa.gz # 51s
+    # ²é¿´×¢ÊÍÊı¾İ¿âµÄ¸ñÊ½
+    head -n2 ${db}/usearch/rdp_16s_v16_sp.fa
+
+    # QIIME greengene 13_8ÓĞ²ÎÊı¾İ¿âÓÃÓÚ¹¦ÄÜ×¢ÊÍ: ftp://greengenes.microbio.me/greengenes_release/gg_13_5/gg_13_8_otus.tar.gz
+    gunzip ${db}/gg/*.fasta.gz
+
+
+## 2. ºÏ²¢Ë«¶ËĞòÁĞ²¢°´ÑùÆ·ÖØÃüÃû Merge paired reads and label samples
+
+    # ÒÔWT1µ¥ÑùÆ·ºÏ²¢ÎªÀı£¬Ö»Îª²âÊÔ£¬ÒÔºóÂ·¹ı
+    # time ${db}/win/vsearch --fastq_mergepairs seq/WT1_1.fq \
+    #   --reverse seq/WT1_2.fq \
+    #   --fastqout temp/WT1.merged.fq \
+    #   --relabel WT1.
+
+    #ÒÀÕÕÊµÑéÉè¼ÆÅú´¦Àí²¢ºÏ²¢
+    #tail -n+2È¥±íÍ·£¬cut -f 1È¡µÚÒ»ÁĞ£¬¼´»ñµÃÑù±¾ÁĞ±í£»18¸ö5Íò¶ÔĞòÁĞÑù±¾ºÏ²¢2m
+    #ÒòÎªÏµÍ³¸´ÖÆCtrl+CÎªLinuxÏÂÖĞÖ¹ÃüÁî£¬·ÀÖ¹³¤Ê±¼äÔËĞĞÒì³£ÖĞ¶Ï£¬½áÎ²Ìí¼Ó&×ªºóÌ¨
+
+    # tail -n+2 result/metadata.tsv
+    # tail -n+2 result/metadata.tsv | cut -f 1
+    # for i in `tail -n+2 result/metadata.tsv | cut -f 1`;do echo ${i}; done
+
+    time for i in `tail -n+2 result/metadata.tsv | cut -f 1`;do
+      ${db}/win/vsearch --fastq_mergepairs seq/${i}_1.fq --reverse seq/${i}_2.fq \
+      --fastqout temp/${i}.merged.fq --relabel ${i}.
+    done &
+    # & ´ú±í×ªºóÌ¨£¬·ÀÖ¹³ÌĞò±»ÖĞ¶Ï£¬TerminalÓÒÉÏ½ÇÓĞĞ¡ºìµã£¬´ú±íÕıÔÚÔËĞĞ
+
+    # ¼º¾­ºÏ²¢Ñù±¾Ö±½Ó¸ÄÃû£¬½ÓÈë·ÖÎöÁ÷³Ì£»Ìæ»»ÉÏÃæ${db}/win/vsearch --fastq_mergepairsÃüÁîÎª
+    # ${db}/win/usearch -fastx_relabel seq/${i}.fq -fastqout temp/${i}.merged.fq -prefix ${i}.
+    # ÁíÒ»ÖÖ·½·¨²Î¿¼¡°³£¼ûÎÊÌâ¡±¡ª¡ª¡°2. ĞòÁĞË«¶ËÒÑ¾­ºÏ²¢¡ª¡ªµ¥¶ËĞòÁĞÖØÃüÃû/Ìí¼ÓÑù±¾Ãû¡±
 
-# æ˜¾ç¤ºå¸®åŠ©ï¼Œä¸»è¦æ˜¯å‚æ•°è¯´æ˜
-Rscript ../6script/tax_stackplot.R -h
+    #ºÏ²¢ËùÓĞÑùÆ·ÖÁÍ¬Ò»ÎÄ¼ş
+    cat temp/*.merged.fq > temp/all.fq
+    #²é¿´ÎÄ¼ş´óĞ¡634M£¬Èí¼ş²»Í¬°æ±¾½á¹ûÂÔÓĞ²îÒì
+    ls -lsh temp/all.fq
+    #²é¿´ĞòÁĞÃû.Ö®Ç°ÊÇ·ñÎªÑù±¾Ãû£¬Ñù±¾Ãû¾ø²»ÔÊĞíÓĞ.
+    head -n 6 temp/all.fq|cut -c1-60
 
-# é»˜è®¤æŒ‰phylumå’Œå‰8ç±»å±•ç¤º, 4X2.5
-Rscript ../6script/tax_stackplot.R
-# Legend too long, main text overlap. Increase figure size.
 
-# æŒ‰ç›®å‰10ï¼Œå›¾ç‰‡å®½6 x 4ï¼ŒæŒ‰ç›®æ°´å¹³ç»˜å›¾æ˜¾è‘—é«˜ä¸°åº¦å‰10ç±»
-Rscript ../6script/tax_stackplot.R -t o \
-  -b 10 -w 10 -e 5
+## 3. ÇĞ³ıÒıÎïÓëÖÊ¿Ø Cut primers and quality filter
 
-
-## 6.4 å·®å¼‚æ¯”è¾ƒ
-
-mkdir -p gg/compare
-
-# æ˜¾ç¤ºå¸®åŠ©
-Rscript ../6script/compare.R -h # æ˜¾ç¤ºå¸®åŠ©
-
-# è®¡ç®—A-C
-Rscript ../6script/compare.R -c A-C
-
-# æŒ‰genotypeåˆ†ç»„ä¸‹KO-WT
-Rscript ../6script/compare.R -n genotype -c KO-WT
-
-# ç›®å‰åªæœ‰OTUè¡¨çš„countå€¼ï¼Œéœ€ç”Ÿæˆç•Œã€é—¨ã€çº²ã€ç›®ã€ç§‘ã€å±ã€ç§çº§åˆ«
-Rscript ../6script/taxonomy_summary_count.R
-
-
-
-# 7. LEfSeå·®å¼‚åˆ†æå’ŒCladogram
-
-mkdir -p gg/lefse
-
-# ç”Ÿæˆlefseè¾“å…¥ï¼Œoutput_lefse.txt
-Rscript ../6script/taxonomy_summary.R -i gg/otutab.txt \
-  -t gg/otu.tax8 -T 0.5 -o gg/lefse/sum
-wc -l gg/lefse/sum*
-
-# æ ¼å¼è½¬æ¢ä¸ºlefseå†…éƒ¨æ ¼å¼
-lefse-format_input.py gg/tax_sum_lefse.txt temp/input.in -c 1 -o 1000000
-# è¿è¡Œlefse
-run_lefse.py temp/input.in temp/input.res
-# ç»˜åˆ¶ç‰©ç§æ ‘æ³¨é‡Šå·®å¼‚
-lefse-plot_cladogram.py temp/input.res gg/lefse/cladogram.pdf --format pdf
-# ç»˜åˆ¶æ‰€æœ‰å·®å¼‚featuresæŸ±çŠ¶å›¾
-lefse-plot_res.py temp/input.res gg/lefse/res.pdf --format pdf
-# ç»˜åˆ¶å•ä¸ªfeaturesæŸ±çŠ¶å›¾(åŒSTAMPä¸­barplot)
-head temp/input.res # æŸ¥çœ‹å·®å¼‚featuresåˆ—è¡¨
-lefse-plot_features.py -f one --feature_name "k__Bacteria.p__Proteobacteria.c__Alphaproteobacteria.o__Rhizobiales" --format pdf \
-  temp/input.in temp/input.res gg/lefse/Rhizobiales.pdf 
-# æ‰¹é‡ç»˜åˆ¶æ‰€æœ‰å·®å¼‚featuresæŸ±çŠ¶å›¾ï¼Œæ…ç”¨(å‡ ç™¾å¼ å·®å¼‚ç»“æœæŸ±çŠ¶å›¾é˜…è¯»ä¹Ÿå¾ˆå›°éš¾)
-lefse-plot_features.py -f diff --archive none --format pdf \
-  temp/input.in temp/input.res gg/lefse/
-
-
-
-# 8. PICRUStåˆ†æï¼šOTUè¡¨è½¬æ¢ä¸ºKOè¡¨
-
-# download_picrust_files.py ä¸‹è½½æ•°æ®æ•°æ®è‡³ /usr/local/lib/python2.7/dist-packages/picrust/data
-# è½¬æ¢ä¸ºOTUè¡¨é€šç”¨æ ¼å¼ï¼Œæ–¹ä¾¿ä¸‹æ¸¸åˆ†æå’Œç»Ÿè®¡
-biom convert -i gg/otutab.txt -o gg/otutab.biom --table-type="OTU table" --to-json
-biom summarize-table -i gg/otutab.biom
-# æ ¡æ­£æ‹·è´æ•°
-normalize_by_copy_number.py -i gg/otutab.biom -o temp/otutab_norm.biom -c /db/picrust/16S_13_5_precalculated.tab.gz
-# é¢„æµ‹å®åŸºå› ç»„KOè¡¨ï¼Œbiomæ–¹ä¾¿ä¸‹æ¸¸å½’ç±»ï¼Œtxtæ–¹ä¾¿æŸ¥çœ‹åˆ†æ
-predict_metagenomes.py -i temp/otutab_norm.biom -o gg/ko.biom -c /db/picrust/ko_13_5_precalculated.tab.gz
-predict_metagenomes.py -f -i temp/otutab_norm.biom -o gg/ko.txt  -c /db/picrust/ko_13_5_precalculated.tab.gz
-
-# KOè½¬æ¢ä¸ºspfæ ¼å¼ç”¨äºstampåˆ†æ
-sed  -i '/# Constru/d;s/#OTU //' gg/ko.txt # åˆ é™¤è¡¨å¤´å¤šä½™è¡ŒåŠä¿®æ­£è¡¨å¤´
-# å°†æœ€åä¸€åˆ—æ³¨é‡Šè°ƒæ•´ä¸ºç¬¬ä¸€åˆ—å³ä¸ºstampä½¿ç”¨çš„spfæ ¼å¼ï¼Œå¤§å®¶ä¹Ÿå¯ç”¨excelæ‰‹åŠ¨è°ƒæ•´
-num=`head -n1 gg/ko.txt|wc -w`
-paste <(cut -f $num gg/ko.txt) <(cut -f 1-$[num-1] gg/ko.txt) > gg/ko.spf
-# ç°åœ¨å¯ä»¥ä¸‹è½½ko.spfï¼Œé…åˆmetadata.txtï¼Œä½¿ç”¨stampç»Ÿè®¡ç»˜å›¾
-
-# æŒ‰åŠŸèƒ½çº§åˆ«åˆ†ç±»æ±‡æ€», -cæŒ‡è¾“å‡ºç±»å‹KEGG_Pathwaysï¼Œå¯åˆå¹¶ä¸º1-3çº§
-for i in 1 2 3;do
-  categorize_by_function.py -f -i gg/ko.biom -c KEGG_Pathways -l ${i} -o gg/ko${i}.txt
-  sed  -i '/# Constru/d;s/#OTU //' gg/ko${i}.txt
-  paste <(cut -f $num gg/ko${i}.txt) <(cut -f 1-$[num-1] gg/ko${i}.txt) > gg/ko${i}.spf
-done
-wc -l gg/ko*.spf
-# ko1åªæœ‰8ç±», ko2æœ‰42ä¸ªç±»ï¼Œæ¨èko3çº§åˆ«ç»Ÿè®¡åˆ†æï¼šå³ä¸å¤šï¼Œåˆä¸å°‘
-
-
-
-
-
-
-
-
-# äºŒã€æ‰©å¢å­æ— å‚åˆ†ææµç¨‹ 16S Amplicon Pipeline -- De novo (é€‰å­¦å†…å®¹ï¼Œæ¨èçœ‹æ‰©å¢å­è§†é¢‘æ•™ç¨‹)
-
-
-# 4. (å¯é€‰Denovoæ–¹æ³•)å»å†—ä½™ä¸ç”ŸæˆOTUs Dereplication and cluster otus 
-
-# 4.1 åºåˆ—å»å†—ä½™ï¼Œæ¨èä½¿ç”¨vsearchï¼Œå¹¶æ·»åŠ miniuniqusizeä¸º8ï¼Œå»é™¤ä½ä¸°åº¦ï¼Œå¢åŠ è®¡ç®—é€Ÿåº¦
-
-# å»å†—ä½™Find unique read sequences and abundances
-vsearch --derep_fulllength temp/filtered.fa \
-  --sizeout --minuniquesize 8 \
-  --output temp/uniques.fa
-# 5S, 368Mb
-
-# 4.2 ç”ŸæˆOTU
-
-# æœ‰ä¸¤ç§æ–¹æ³•é€‰æ‹©ï¼Œå¦‚æœ€æ–°çš„unoise3æ¨èï¼Œä¹Ÿå¯ä»¥ä½¿ç”¨ä¼ ç»Ÿçš„97%èšç±»ï¼Œä¾›å¤‡é€‰ã€‚
-
-# å¯é€‰97%èšç±»ï¼Œä¸æ¨èï¼Œé™¤éreviewerè¦æ±‚
-# usearch -cluster_otus temp/uniques.fa \
-#   -otus temp/otus.fa \
-#   -relabel OTU_
-# 4S, 16Mb, 984 OTUs, 428 chimeras
-
-# é¢„æµ‹ç”Ÿç‰©å­¦åºåˆ—OTUå¹¶å»é™¤åµŒåˆ Denoise: predict biological sequences and filter chimeras
-usearch -unoise3 temp/uniques.fa \
-  -zotus temp/zotus.fa
-# 43S, 56Mb, 3326 OTUs, 348 chimeras
-
-# ä¿®æ”¹åºåˆ—åï¼šæ ¼å¼è°ƒæ•´ format OTU prefix
-sed 's/Zotu/OTU_/g' temp/zotus.fa > temp/otus.fa
-
-
-# 4.3 åŸºäºå‚è€ƒå»åµŒåˆ
-# å‡†å¤‡æ•°æ®åº“ http://www.drive5.com/sintax
-# cd db
-# wget http://www.drive5.com/sintax/silva_16s_v123.fa.gz
-# gunzip silva_16s_v123.fa.gz
-# cd ..
-vsearch --uchime_ref temp/otus.fa \
-  --db db/silva_16s_v123.fa \
-  --nonchimeras result/otus.fa
-
-
-# 4.4 ç”ŸæˆOTUè¡¨ Creat OTUs table
-vsearch --usearch_global temp/filtered.fa \
-  --db result/otus.fa \
-  --id 0.97 --threads 4 \
-  --otutabout result/otutab.txt
-# Matching query sequences: 639169 of 740493 (86.32%)
-
-# 5. OTUè¡¨ç»Ÿè®¡å’Œæ ‡å‡†åŒ–
-
-# OTUè¡¨ç®€å•ç»Ÿè®¡ Summary OTUs table
-usearch -otutab_stats result/otutab.txt \
-	-output result/otutab_report.txt 
-cat result/otutab_report.txt 
-
-# ç­‰é‡æŠ½æ ·æ ‡å‡†åŒ– normlize by subsample to 10000
-# æˆ‘ä»¬çœ‹åˆ°æœ€å°æ ·å“æ•°æ®é‡ä¸º3.1ä¸‡ï¼Œå¯ä»¥æŠ½æ ·è‡³3ä¸‡
-usearch -otutab_norm result/otutab.txt \
-	-sample_size 31541 \
-	-output result/otutab_norm.txt 
-usearch -otutab_stats result/otutab_norm.txt \
-	-output result/otutab_norm_report.txt 
-cat result/otutab_norm_report.txt 
-
-
-
-# 6. ç‰©ç§æ³¨é‡Š Assign taxonomy
-# wget http://www.drive5.com/sintax/rdp_16s_v16_sp.fa.gz
-# gunzip rdp_16s_v16_sp.fa.gz
-usearch -sintax result/otus.fa -db db/rdp_16s_v16.fa \
-  -strand both -tabbedout result/sintax.txt -sintax_cutoff 0.8
-# 21s, 103Mb
-# usearch -sintax result/otus.fa -db db/rdp_16s_v16.fa \
-#   -strand plus -tabbedout result/sintax.txt -sintax_cutoff 0.8
-# å•é“¾ä¸‹18sï¼Œ 103Mb
-
-head -n2 result/sintax.txt
-# ç»Ÿè®¡é—¨çº²ç›®ç§‘å±ï¼Œä½¿ç”¨ rankå‚æ•° p c o f gï¼Œä¸ºphylum, class, order, family, genusç¼©å†™
-# æˆ‘ä»¬å…ˆè®¡ç®—é—¨phylum, ç›®orderå’Œå±genusæ°´å¹³æ±‡æ€»è¡¨æ–¹ä¾¿è§‚å¯Ÿ
-mkdir -p tax
-for i in p c o f g;do
-  usearch -sintax_summary result/sintax.txt \
-  -otutabin result/otutab_norm.txt \
-  -rank ${i} \
-  -output tax/sum_${i}.txt
-done
-# usearch -sintax_summary result/sintax.txt -otutabin result/otutab_norm.txt \
-#   -rank p -output tax/tax_phylum.txt
-# usearch -sintax_summary result/sintax.txt -otutabin result/otutab_norm.txt \
-#   -rank o -output tax/tax_order.txt
-# usearch -sintax_summary result/sintax.txt -otutabin result/otutab_norm.txt \
-#   -rank g -output tax/tax_genus.txt
-  
-# Taxonomyä¸­å¼‚å¸¸å­—ç¬¦
-sed -i 's/(//g;s/)//g;s/\"//g;s/\/Chloroplast//g' tax/sum_*.txt
-
-# æ ¼å¼åŒ–ç‰©ç§æ³¨é‡Šï¼šå»é™¤sintaxä¸­ç½®ä¿¡å€¼ï¼Œåªä¿ç•™ç‰©ç§æ³¨é‡Šï¼Œæ›¿æ¢:ä¸º_ï¼Œåˆ é™¤å¼•å·
-cut -f 1,4 result/sintax.txt|sed 's/\td/\tk/;s/:/__/g;s/,/;/g;s/"//g;s/\/Chloroplast//' > result/otus.tax
-head -n2 result/otus.tax
-# æ³¨æ„æ³¨é‡Šæ˜¯éæ•´é½çš„ï¼Œç”±äºæ–°ç‰©ç§åªæ˜¯ç›¸è¿‘è€Œä¸åŒ
-# ç”Ÿæˆç‰©ç§è¡¨æ ¼ï¼šæ³¨æ„OTUä¸­ä¼šæœ‰æœ«çŸ¥ä¸ºç©ºç™½ï¼Œè¡¥é½åˆ†ç±»æœªçŸ¥æ–°ç‰©ç§ä¸ºUnassigned
-awk 'BEGIN{OFS=FS="\t"}{delete a; a["k"]="Unassigned";a["p"]="Unassigned";a["c"]="Unassigned";a["o"]="Unassigned";a["f"]="Unassigned";a["g"]="Unassigned";\
-  split($2,x,";");for(i in x){split(x[i],b,"__");a[b[1]]=b[2];} \
-  print $1,a["k"],a["p"],a["c"],a["o"],a["f"],a["g"];}' \
-  result/otus.tax >temp/otus.tax
-sed 's/;/\t/g;s/.__//g;' temp/otus.tax|cut -f 1-7| sed '1 s/^/#OTUID\tKindom\tPhylum\tClass\tOrder\tFamily\tGenus\n/' > tax/taxtab.txt
-head -n3 tax/taxtab.txt
-
-
-
-# 7. Alphaå¤šæ ·æ€§ Alpha diversity
-# Calculate all alpha diversity, details in http://www.drive5.com/usearch/manual/alpha_metrics.html
-mkdir -p alpha
-usearch -alpha_div result/otutab_norm.txt \
-  -output alpha/alpha.txt 
-# ç¨€é‡Šæ›²çº¿ï¼šå–1%-100%çš„åºåˆ—ä¸­OTUsæ•°é‡ Rarefaction from 1%, 2% .. 100% in richness (observed OTUs)-method fast / with_replacement / without_replacement https://drive5.com/usearch/manual/cmd_otutab_subsample.html
-usearch -alpha_div_rare result/otutab_norm.txt \
-  -output alpha/alpha_rare.txt -method without_replacement
-# 9s, 6.8Mb
-
-
-
-# 8. Betaå¤šæ ·æ€§ Beta diversity
-# åŸºäºOTUæ„å»ºè¿›åŒ–æ ‘ Make OTU tree
-usearch -cluster_agg result/otus.fa -treeout result/otus.tree
-# 25s, 81Mb
-# ç»“æœæœ‰å¤šä¸ªæ–‡ä»¶ï¼Œéœ€è¦ç›®å½•
-mkdir -p beta/ 
-# ç”Ÿæˆ5ç§è·ç¦»çŸ©é˜µï¼šbray_curtis, euclidean, jaccard, manhatten, unifrac
-usearch -beta_div result/otutab_norm.txt -tree result/otus.tree \
-  -filename_prefix beta/
-
-
-
-
-
-# äºŒã€ç»Ÿè®¡ç»˜å›¾
-
-# ç»˜å›¾æ‰€éœ€Rè„šæœ¬ä½äºscriptç›®å½•ä¸­
-
-# Windowsä¸­éœ€è¦Rstudioæ‰“å¼€è„šæœ¬ï¼Œè®¾ç½®å·¥ä½œç›®å½•(data)ï¼Œå…¨é€‰è¿è¡Œå³å¯ï¼Œ
-# å‚æ•°ä¿®æ”¹ä½äº"è§£æå‘½ä»¤è¡Œ"éƒ¨åˆ†ï¼Œå¯ä¿®æ”¹æ¯ä¸ªå‚æ•°çš„defaultå€¼æ”¹å˜è¾“å…¥ã€è¾“å…¥æ–‡ä»¶ç­‰
-# Linuxç”¨éœ€ç›®å‰å‘½ä»¤è¡Œæ“ä½œè®¾ç½®å‚æ•°éå¸¸æ–¹ä¾¿
-
-
-## 1. Alphaå¤šæ ·æ€§æŒ‡æ•°ç®±çº¿å›¾ Alpha index in boxplot
-# è„šæœ¬æ”¾åœ¨ç¯å¢ƒå˜é‡å¯ç›´æ¥ä½¿ç”¨æ–‡ä»¶åï¼Œå¦åˆ™æŒ‡å®šç›®å½•
-# æ˜¾ç¤ºè„šæœ¬å¸®åŠ©
-Rscript ./script/alpha_boxplot.r -h
-# é»˜è®¤ç”»richness
-Rscript ./script/alpha_boxplot.r
-# å®Œæ•´å‚æ•°ï¼Œè¾“å‡ºæ–‡ä»¶åé»˜è®¤ä¸ºalphaæŒ‡æ•°ç±»å‹
-Rscript ./script/alpha_boxplot.r -i alpha/alpha.txt -t richness \
-  -d doc/design.txt -n group \
-  -o alpha/richness \
-  -w 4 -e 2.5
-# ç»˜åˆ¶chao1
-Rscript ./script/alpha_boxplot.r -t chao1 
-
-
-
-## 2. Alphaç¨€é‡Šæ›²çº¿ Rarefraction curve
-# æ˜¾ç¤ºå¸®åŠ©
-Rscript ./script/alpha_rare.r -h
-# é»˜è®¤ç»˜åˆ¶4x2.5è‹±å¯¸çš„æ ·å“å’Œç»„å‡å€¼å›¾
-Rscript ./script/alpha_rare.r
-# æŒ‡å®šè¾“å…¥æ–‡ä»¶å’Œå®éªŒè®¾è®¡ï¼Œå®éªŒç»„åˆ—ï¼Œå›¾ç‰‡é•¿å®½å’Œè¾“å‡ºæ–‡ä»¶å‰ç¼€
-Rscript ./script/alpha_rare.r -i alpha/alpha_rare.txt \
-  -d doc/design.txt -n group \
-  -o alpha/rare_ \
-  -w 4 -e 2.5 
-# åªæƒ³ç”¨ä¸¤ç»„å±•ç¤ºPCoAï¼Œåˆ é™¤Bç»„ï¼Œä½¿ç”¨æ–°çš„design2.txt(æ‰‹åŠ¨åˆ é™¤äº†Bç»„è¡Œ)
-Rscript ./script/alpha_rare.r -d doc/design2.txt -n group \
-  -o alpha/rare_2
-  
-
-
-## 3. Betaä¸»åæ ‡è½´åˆ†æ PCoA
-
-# å±•ç¤ºæ ·å“é—´è·ç¦»åˆ†å¸ƒï¼Œç»Ÿè®¡ç»„é—´æ˜¯å¦æ˜¾è‘—ï¼Œä¹Ÿç”¨äºå¼‚å¸¸æ ·å“ç­›é€‰
-
-# æ˜¾ç¤ºè„šæœ¬å¸®åŠ©
-Rscript ./script/beta_pcoa.r -h
-# é»˜è®¤åŸºäºbray_curtisè·ç¦»
-Rscript ./script/beta_pcoa.r
-# å®Œæ•´é»˜è®¤å‚æ•°
-Rscript ./script/beta_pcoa.r -i beta/bray_curtis.txt -t bray_curtis \
-  -d doc/design.txt -n group \
-  -o beta/pcoa_bray_curtis \
-  -w 4 -e 2.5 
-# åŸºäºunifracè·ç¦»
-Rscript ./script/beta_pcoa.r -t unifrac
-# åªæƒ³ç”¨ä¸¤ç»„å±•ç¤ºPCoAï¼Œåˆ é™¤Bç»„ï¼Œä½¿ç”¨æ–°çš„design2.txt(æ‰‹åŠ¨åˆ é™¤äº†Bç»„è¡Œ)
-Rscript ./script/beta_pcoa.r -i beta/bray_curtis.txt \
-  -d doc/design2.txt -n group \
-  -o beta/pcoa_bray_curtis_AC
-
-
-
-## 4. é™åˆ¶æ€§ä¸»åæ ‡è½´åˆ†æ Constrained PCoA
-
-# å±•ç¤ºç»„é—´æœ€å¤§å·®å¼‚
-
-# æ˜¾ç¤ºè„šæœ¬å¸®åŠ©
-Rscript ./script/beta_cpcoa.r -h
-
-# åŸºäºbrayè·ç¦»è®¡ç®—CCAï¼Œé»˜è®¤brayæ–¹æ³•
-Rscript ./script/beta_cpcoa.r
-
-# åŸºäºjaccardè·ç¦»è®¡ç®—CCA
-Rscript ./script/beta_cpcoa.r -t jaccard
-
-# é™„å®Œæ•´å‚æ•°
-Rscript ./script/beta_cpcoa.r -i result/otutab_norm.txt -t bray \
-  -d doc/design.txt -n group \
-  -o beta/cpcoa_bray
-
-
-
-## 5. ç‰©ç§ä¸°åº¦æŸ±çŠ¶å›¾ Taxonomy barplot
-
-# æ˜¾ç¤ºå¸®åŠ©ï¼Œä¸»è¦æ˜¯å‚æ•°è¯´æ˜
-Rscript ./script/tax_stackplot.r -h
-
-# é»˜è®¤æŒ‰phylumå’Œå‰8ç±»å±•ç¤º, 4X2.5
-Rscript ./script/tax_stackplot.r 
-# Legend too long, main text overlap. Increase figure size.
-
-# æŒ‰ç›®å‰10ï¼Œå›¾ç‰‡å®½6 x 4
-Rscript ./script/tax_stackplot.r -t order \
-  -b 10 -w 6 -e 4
-
-
-
-
-# ç¬¬äºŒå¤©ï¼Œç¬¬1è®²
-
-## 6. ç»„é—´å·®å¼‚æ¯”è¾ƒ
-
-# éœ€è¦otuè¡¨ã€å®éªŒè®¾è®¡å’Œç‰©ç§æ³¨é‡Š
-
-# ç»“æœç›®å½•
-mkdir -p compare
-
-# æ˜¾ç¤ºå¸®åŠ©
-Rscript ./script/compare_edgeR.r -h # æ˜¾ç¤ºå¸®åŠ©
-
-# é»˜è®¤å‚æ•°ï¼šè®¡ç®—groupåˆ†ç±»ä¸‹A-Bæ¯”è¾ƒ
-Rscript ./script/compare_edgeR.r
-
-# è®¡ç®—A-C
-Rscript ./script/compare_edgeR.r -c A-C
-
-# æŒ‰genotypeåˆ†ç»„ä¸‹KO-WT
-Rscript ./script/compare_edgeR.r -n genotype -c KO-WT
-
-## 7. ç»˜åˆ¶ç«å±±å›¾ã€çƒ­å›¾å’Œæ›¼å“ˆé¡¿å›¾ï¼ŒåŒä¸Š
-
-# æ•°æ®çŸ©é˜µåœ¨edgeR_KO-WT_sig.txtæ–‡ä»¶ä¸­
-# æ ·å“æ³¨é‡Šåœ¨design.txtä¸­ï¼Œç”¨äºåˆ—åˆ†ç»„æ³¨é‡Š
-# OTUç‰©ç§æ³¨é‡Šæ¥è‡ªtaxtab.txtæ–‡ä»¶(å¯é€‰)# Vsearch 16S Amplicon pipeline
-
-# Usearch32ä½ç‰ˆåˆ†æ>4GBæ–‡ä»¶å—é™ï¼Œ64ä½æ”¶è´¹ã€‚Vsearchå…è´¹ä¸”ä¸å—ä»»ä½•é™åˆ¶
-
-# å‘½ä»¤è®¡ç®—æ—¶é—´åŸºäº18ä¸ª5ä¸‡æ¡åºåˆ—æ ·å“ï¼Œäºwin10 2.3G i5åŒæ ¸4çº¿ç¨‹ç¬”è®°æœ¬
-
-# 1. äº†è§£å·¥ä½œç›®å½•å’Œæ–‡ä»¶
-
-# å»ºç«‹ä¸´æ—¶å’Œç»“æœç›®å½•
-mkdir -p temp # ä¸´æ—¶æ–‡ä»¶ temp directory for intermediate files
-mkdir -p result # æœ€ç»ˆç»“æœ important results
-
-# æ–‡ä»¶
-# vsearch.sh åˆ†æä¸»æµç¨‹
-# db/*.fa # å‚è€ƒæ•°æ®åº“ database files
-# seq/*.fq.gz å‹ç¼©çš„åŸå§‹æµ‹åºæ•°æ®
-# doc/design.txt å®éªŒè®¾è®¡æ–‡ä»¶
-
-
-
-# 2. åˆå¹¶åŒç«¯åºåˆ—ä¸æ ·å“æ‹†åˆ† Merge paired reads and label samples
-
-# æµ‹åºæ•°æ®è§£å‹
-# gunzip seq/*
-
-# ä¾ç…§å®éªŒè®¾è®¡æ‰¹å¤„ç†å¹¶åˆå¹¶
-for i in `tail -n+2 doc/design.txt | cut -f 1`;do
-  vsearch --fastq_mergepairs seq/${i}_1.fq --reverse seq/${i}_2.fq \
-  --fastqout temp/${i}.merged.fq --relabel ${i}.
-done 
-
-# åˆå¹¶æ‰€æœ‰æ ·å“è‡³åŒä¸€æ–‡ä»¶
-cat temp/*.merged.fq > temp/all.fq
-ls -l temp/all.fq
-
-
-
-# 3. åˆ‡é™¤å¼•ç‰©ä¸è´¨æ§ Cut primers and quality filter
-# è¯·æŒ‰å®é™…ä¿®æ”¹ï¼Œå¦‚Cut barcode 10bp + V5 19bp in left and V7 18bp in right
-time vsearch --fastx_filter temp/all.fq \
-  --fastq_stripleft 29 --fastq_stripright 18 \
-  --fastqout temp/stripped.fq # 1m5s
-# è´¨é‡æ§åˆ¶fastq filter, keep reads error rates less than 1%
-time vsearch --fastx_filter temp/stripped.fq \
-  --fastq_maxee_rate 0.01 \
-  --fastaout temp/filtered.fa # 55s
-#761431 sequences kept (of which 0 truncated), 5627 sequences discarded.
-
-
-
-# 4. å»å†—ä½™ä¸ç”ŸæˆOTUs Dereplication and cluster otus
-# 4.1 åºåˆ—å»å†—ä½™ï¼Œæ¨èä½¿ç”¨vsearchï¼Œå¹¶æ·»åŠ miniuniqusizeä¸º8ï¼Œå»é™¤ä½ä¸°åº¦ï¼Œå¢åŠ è®¡ç®—é€Ÿåº¦
-time vsearch --derep_fulllength temp/filtered.fa \
-  --sizeout --minuniquesize 8 \
-  --output temp/uniques.fa # 5s
-
-
-## æ­¤å¤„æˆ‘ä»¬ç”¨åŸºäºreferenceçš„å»åµŒåˆï¼Œä¸‹è½½rdp_gold.faä½œ
-#ä¸ºreferenceæ•°æ®åº“
-#wget http://drive5.com/uchime/rdp_gold.fa
-
-# èšç±»æ–¹å¼ç”ŸæˆOTU
-time vsearch --cluster_fast temp/uniques.fa \
-  --id 0.97 --centroids temp/otus.fa \
-  --relabel OTU_ # 3s Clusters: 1244 --uc temp/clusters.uc
-dos2unix temp/otus.fa # å»é™¤windowsæ¢è¡Œç¬¦
-
-
-# ç»†èŒå¯ç”¨Usearchä½œè€…æ•´ç†çš„RDP Goldæ•°æ®åº“å»é™¤åµŒåˆä½“
-# wget http://drive5.com/uchime/rdp_gold.fa
-time vsearch --uchime_ref temp/otus.fa \
-  --db db/rdp_gold.fa \
-  --nonchimeras result/otus.fa # 9s, 1041 non-chimeras,
-dos2unix result/otus.fa # å»é™¤windowsæ¢è¡Œç¬¦
-	
-# Create OTUs table
-time vsearch --usearch_global temp/filtered.fa \
-  --db result/otus.fa \
-  --id 0.97 \
-  --otutabout result/otutab.txt --threads 4 # 8m54s
-dos2unix result/otutab.txt
-# æ£€æŸ¥æ˜¯å¦è¿˜æœ‰windowsæ¢è¡Œç¬¦
-cat -A result/otutab.txt | head
-
-# ç‰©ç§æ³¨é‡Š
-# vsearch --usearch_global result/otus.fa --db db/rdp_16s_v16.fa --biomout out_tax.txt --id 0.97
-
-# # è·å¾—RDPç‰©ç§æ³¨é‡Š
-# usearch -sintax gg/otu.fa -db /db/usearch/rdp_16s_v16_sp.fa \
-#   -strand both -tabbedout gg/sintax.txt -sintax_cutoff 0.6
-# # å„åˆ†ç±»çº§æ±‡æ€»è¡¨
-# for i in p c o f g;do
-#   usearch -sintax_summary gg/sintax.txt \
-#   -otutabin gg/otutab.txt \
-#   -rank ${i} \
-#   -output gg/tax_sum_${i}.txt
-# done
-
-
+    # Cut barcode 10bp + V5 19bp in left and V7 18bp in right
+    # ×ó¶Ë10bp Barcode+19bpÉÏÓÎÒıÎïÎª29£¬ÓÒ¶ËÎª18bpÏÂÓÎÒıÎïÌî18
+    # Îñ±ØÇå³şÊµÑéÉè¼ÆºÍÒıÎï³¤¶È£¬ÒıÎïÒÑ¾­È¥³ı¿ÉÌî0£¬76ÍòÌõĞòÁĞ37s
+    time ${db}/win/vsearch --fastx_filter temp/all.fq \
+      --fastq_stripleft 29 --fastq_stripright 18 \
+      --fastq_maxee_rate 0.01 \
+      --fastaout temp/filtered.fa
+
+    # ²é¿´ÎÄ¼şÇ°2ĞĞ£¬ÁË½âfaÎÄ¼ş¸ñÊ½
+    head -n 2 temp/filtered.fa
+
+
+## 4. È¥ÈßÓàÌôÑ¡OTU/ASV Dereplicate and cluster/denoise
+
+### 4.1 ĞòÁĞÈ¥ÈßÓà Dereplication
+
+    # ²¢Ìí¼Óminiuniqusize×îĞ¡Îª10»ò1/1M£¬È¥³ıµÍ·á¶ÈÔëÒô²¢Ôö¼Ó¼ÆËãËÙ¶È
+    # -sizeoutÊä³ö·á¶È, --relabel±ØĞë¼ÓĞòÁĞÇ°×º£¬·ñÔòÎÄ¼şÍ·²»Õı³£, 10s
+    time ${db}/win/vsearch --derep_fulllength temp/filtered.fa \
+      --output temp/uniques.fa --relabel Uni --minuniquesize 10 --sizeout
+    #¸ß·á¶È·ÇÈßÓàĞòÁĞ·Ç³£Ğ¡(<2Mb),Ãû³ÆºóÓĞsizeºÍÆµÂÊ
+    ls -lsh temp/uniques.fa
+    head -n 2 temp/uniques.fa
+
+### 4.2 ¾ÛÀàOTU/È¥ÔëASV Cluster OTUs / denoise ASV
+
+    #ÓĞÁ½ÖÖ·½·¨£ºÍÆ¼öunoise3È¥Ôë»ñµÃµ¥¼î»ù¾«¶ÈASV£¬´«Í³µÄ97%¾ÛÀàOTU (ÊôË®Æ½¾«¶È)¹©±¸Ñ¡
+    #usearchÁ½ÖÖÌØÕ÷ÌôÑ¡·½·¨¾ù×Ô´øde novoÈ¥Ç¶ºÏÌå
+
+    #·½·¨1. 97%¾ÛÀàOTU£¬ÊÊºÏ´óÊı¾İ/ASV¹æÂÉ²»Ã÷ÏÔ/reviewerÒªÇó
+    #½á¹ûºÄÊ±6s, ²úÉú878 OTUs, È¥³ı320 chimeras
+    # time ${db}/win/usearch -cluster_otus temp/uniques.fa \
+    #  -otus temp/otus.fa \
+    #  -relabel OTU_
+
+    #·½·¨2. ASVÈ¥Ôë Denoise: predict biological sequences and filter chimeras
+    #59s, 2920 good, 227 chimeras
+    time ${db}/win/usearch -unoise3 temp/uniques.fa \
+      -zotus temp/zotus.fa
+    #ĞŞ¸ÄĞòÁĞÃû£ºZotuÎª¸ÄÎªASV·½±ãÊ¶±ğ
+    sed 's/Zotu/ASV_/g' temp/zotus.fa > temp/otus.fa
+    head -n 2 temp/otus.fa
+
+    #·½·¨3. Êı¾İ¹ı´óÎŞ·¨Ê¹ÓÃusearchÊ±£¬±¸Ñ¡vsearch·½·¨¼û"³£¼ûÎÊÌâ3"
+
+### 4.3 »ùÓÚ²Î¿¼È¥Ç¶ºÏ Reference-based chimera detect
+
+    # ²»ÍÆ¼ö£¬ÈİÒ×ÒıÆğ¼ÙÒõĞÔ£¬ÒòÎª²Î¿¼Êı¾İ¿âÎŞ·á¶ÈĞÅÏ¢£¬
+    # ¶øde novoÊ±ÒªÇóÇ×±¾·á¶ÈÎªÇ¶ºÏÌå16±¶ÒÔÉÏ·ÀÖ¹¼ÙÒõĞÔ
+    # ÒòÎªÒÑÖªĞòÁĞ²»»á±»È¥³ı£¬Êı¾İ¿âÑ¡ÔñÔ½´óÔ½ºÏÀí£¬¼ÙÒõĞÔÂÊ×îµÍ
+    mkdir -p result/raw
+
+    # ·½·¨1. vsearch+rdpÈ¥Ç¶ºÏ(¿ìµ«ÈİÒ×¼ÙÒõĞÔ)£¬»ò
+    # silvaÈ¥Ç¶ºÏ(silva_16s_v123.fa)£¬ÍÆ¼ö(Âı£¬ºÄÊ±15m ~ 3h£¬µ«¸üºÃ)
+    time ${db}/win/vsearch --uchime_ref temp/otus.fa \
+      -db ${db}/usearch/rdp_16s_v16_sp.fa \
+      --nonchimeras result/raw/otus.fa
+    # RDP: 51s, 250 (8.6%) chimeras; SILVA£º10m, 255 (8.7%) chimeras
+    # Win vsearch½á¹ûÌí¼ÓÁËwindows»»ĞĞ·û^MĞèÉ¾³ı£¬mac²»ÒªÖ´ĞĞ´ËÃüÁî
+    sed -i 's/\r//g' result/raw/otus.fa
+
+    # ·½·¨2. ²»È¥Ç¶ºÏ
+    cp -f temp/otus.fa result/raw/otus.fa
+
+
+## 5. ÌØÕ÷±íºÍÉ¸Ñ¡ Feature table
+
+    # OTUºÍASVÍ³³ÆÎªÌØÕ÷(Feature)£¬ËüÃÇµÄÇø±ğÊÇ£º
+    # OTUÍ¨³£°´97%¾ÛÀàºóÌôÑ¡×î¸ß·á¶È»òÖĞĞÄµÄ´ú±íĞÔĞòÁĞ£»
+    # ASVÊÇ»ùÓÚĞòÁĞ½øĞĞÈ¥Ôë(ÅÅ³ı»òĞ£Õı´íÎóĞòÁĞ£¬²¢ÌôÑ¡·á¶È½Ï¸ßµÄ¿ÉĞÅĞòÁĞ)×÷Îª´ú±íĞÔĞòÁĞ
+
+### 5.1 Éú³ÉÌØÕ÷±í Creat Feature table
+
+    # ·½·¨1. usearchÉú³ÉÌØÕ÷±í£¬Ğ¡Ñù±¾(<30)¿ì£»µ«´óÑù±¾ÊÜÏŞÇÒ¶àÏß³ÌĞ§ÂÊµÍ£¬84.1%, 4ºË1m
+    # time ${db}/win/usearch -otutab temp/filtered.fa -otus result/raw/otus.fa \
+    #   -otutabout result/raw/otutab.txt -threads 4
+
+    # ·½·¨2. vsearchÉú³ÉÌØÕ÷±í
+    time ${db}/win/vsearch --usearch_global temp/filtered.fa --db result/raw/otus.fa \
+    	--otutabout result/raw/otutab.txt --id 0.97 --threads 4
+    #652036 of 761432 (85.63%)¿É±È¶Ô£¬ºÄÊ±9m
+    # windowsÓÃ»§É¾³ı»»ĞĞ·û^M
+    sed -i 's/\r//' result/raw/otutab.txt
+    head -n3 result/raw/otutab.txt |cat -A
+
+
+### 5.2 ÎïÖÖ×¢ÊÍ-È¥³ıÖÊÌåºÍ·ÇÏ¸¾ú/¹Å¾ú²¢Í³¼Æ±ÈÀı(¿ÉÑ¡) Remove plastid and non-Bacteria
+
+    # RDPÎïÖÖ×¢ÊÍ(rdp_16s_v16_sp)¸ü¿ì£¬µ«È±ÉÙÍêÕûÕæºËÀ´Ô´Êı¾İ,¿ÉÄÜ²»ÍêÕû£¬ºÄÊ±15s;
+    # SILVAÊı¾İ¿â(silva_16s_v123.fa)¸üºÃ×¢ÊÍÕæºË¡¢ÖÊÌåĞòÁĞ£¬3h
+    time ${db}/win/vsearch --sintax result/raw/otus.fa --db ${db}/usearch/rdp_16s_v16_sp.fa \
+      --tabbedout result/raw/otus.sintax --sintax_cutoff 0.6
+
+    # Ô­Ê¼ÌØÕ÷±íĞĞÊı
+    wc -l result/raw/otutab.txt
+    #R½Å±¾Ñ¡ÔñÏ¸¾ú¹Å¾ú(ÕæºË)¡¢È¥³ıÒ¶ÂÌÌå¡¢ÏßÁ£Ìå²¢Í³¼Æ±ÈÀı£»Êä³öÉ¸Ñ¡²¢ÅÅĞòµÄOTU±í
+    #ÊäÈëÎªOTU±íresult/raw/otutab.txtºÍÎïÖÖ×¢ÊÍresult/raw/otus.sintax
+    #Êä³öÉ¸Ñ¡²¢ÅÅĞòµÄÌØÕ÷±íresult/otutab.txtºÍ
+    #Í³¼ÆÎÛÈ¾±ÈÀıÎÄ¼şresult/raw/otutab_nonBac.txtºÍ¹ıÂËÏ¸½Úotus.sintax.discard
+    #Õæ¾úITSÊı¾İ£¬Çë¸ÄÓÃotutab_filter_nonFungi.R½Å±¾£¬Ö»É¸Ñ¡Õæ¾ú
+    #½«À´¸üĞÂÎª°´taxonomy×ÔÓÉ¹ıÂËµÄ²ÎÊı£¬ÊÊºÏÏ¸¾ú¡¢Õæ¾ú
+    Rscript ${db}/script/otutab_filter_nonBac.R -h
+    Rscript ${db}/script/otutab_filter_nonBac.R \
+      --input result/raw/otutab.txt \
+      --taxonomy result/raw/otus.sintax \
+      --output result/otutab.txt\
+      --stat result/raw/otutab_nonBac.stat \
+      --discard result/raw/otus.sintax.discard
+    # É¸Ñ¡ºóÌØÕ÷±íĞĞÊı
+    wc -l result/otutab.txt
+
+    #¹ıÂËÌØÕ÷±í¶ÔÓ¦ĞòÁĞ
+    cut -f 1 result/otutab.txt | tail -n+2 > result/otutab.id
+    ${db}/win/usearch -fastx_getseqs result/raw/otus.fa \
+        -labels result/otutab.id -fastaout result/otus.fa
+    #¹ıÂËÌØÕ÷±í¶ÔÓ¦ĞòÁĞ×¢ÊÍ
+    awk 'NR==FNR{a[$1]=$0}NR>FNR{print a[$1]}'\
+        result/raw/otus.sintax result/otutab.id \
+        > result/otus.sintax
+    #²¹ÆëÄ©Î²ÁĞ
+    sed -i 's/\t$/\td:Unassigned/' result/otus.sintax
+    # head -n2 result/otus.sintax
+
+    # ·½·¨2. ¾õµÃÉ¸Ñ¡²»ºÏÀí¿ÉÒÔ²»É¸Ñ¡
+    # cp result/raw/otu* result/
+
+    #¿ÉÑ¡Í³¼Æ·½·¨£ºOTU±í¼òµ¥Í³¼Æ Summary OTUs table
+    ${db}/win/usearch -otutab_stats result/otutab.txt \
+      -output result/otutab.stat
+    cat result/otutab.stat
+    #×¢Òâ×îĞ¡Öµ¡¢·ÖÎ»Êı£¬»ò²é¿´result/raw/otutab_nonBac.statÖĞÑù±¾ÏêÏ¸Êı¾İÁ¿£¬ÓÃÓÚÖØ²ÉÑù
+
+### 5.3 µÈÁ¿³éÑù±ê×¼»¯ normlize by subsample
+
+    #Ê¹ÓÃvegan°ü½øĞĞµÈÁ¿ÖØ³éÑù£¬ÊäÈëreads count¸ñÊ½Feature±íresult/otutab.txt
+    #¿ÉÖ¸¶¨ÊäÈëÎÄ¼ş¡¢³éÑùÁ¿ºÍËæ»úÊı£¬Êä³ö³éÆ½±íresult/otutab_rare.txtºÍ¶àÑùĞÔalpha/vegan.txt
+    mkdir -p result/alpha
+    Rscript ${db}/script/otutab_rare.R --input result/otutab.txt \
+      --depth 32000 --seed 1 \
+      --normalize result/otutab_rare.txt \
+      --output result/alpha/vegan.txt
+    ${db}/win/usearch -otutab_stats result/otutab_rare.txt \
+      -output result/otutab_rare.stat
+    cat result/otutab_rare.stat
+
+
+## 6. Alpha¶àÑùĞÔ Alpha diversity
+
+### 6.1. ¼ÆËã¶àÑùĞÔÖ¸Êı Calculate alpha diversity index
+    #Calculate all alpha diversity index(Chao1ÓĞ´íÎóÎğÓÃ)
+    #details in http://www.drive5.com/usearch/manual/alpha_metrics.html
+    ${db}/win/usearch -alpha_div result/otutab_rare.txt \
+      -output result/alpha/alpha.txt
+
+### 6.2. ¼ÆËãÏ¡ÊÍ¹ı³ÌµÄ·á¸»¶È±ä»¯ Rarefaction
+    #Ï¡ÊÍÇúÏß£ºÈ¡1%-100%µÄĞòÁĞÖĞOTUsÊıÁ¿£¬20s
+    #Rarefaction from 1%, 2% .. 100% in richness (observed OTUs)-method fast / with_replacement / without_replacement https://drive5.com/usearch/manual/cmd_otutab_subsample.html
+    time ${db}/win/usearch -alpha_div_rare result/otutab_rare.txt \
+      -output result/alpha/alpha_rare.txt -method without_replacement
+
+### 6.3. É¸Ñ¡¸÷×é¸ß·á¶È¾úÓÃÓÚ±È½Ï
+
+    #¼ÆËã¸÷ÌØÕ÷µÄ¾ùÖµ£¬ÓĞ×éÔÙÇó·Ö×é¾ùÖµ£¬Ğè¸ù¾İÊµÑéÉè¼Æmetadata.txtĞŞ¸Ä×éÁĞÃû
+    #ÊäÈëÎÄ¼şÎªfeautre±íresult/otutab.txt£¬ÊµÑéÉè¼Æmetadata.txt
+    #Êä³öÎªÌØÕ÷±í°´×éµÄ¾ùÖµ-Ò»¸öÊµÑé¿ÉÄÜÓĞ¶àÖÖ·Ö×é·½Ê½
+    Rscript ${db}/script/otu_mean.R --input result/otutab.txt \
+      --design result/metadata.tsv \
+      --group Group --thre 0 \
+      --output result/otutab_mean.txt
+    head -n3 result/otutab_mean.txt
+
+    #ÈçÒÔÆ½¾ù·á¶ÈÆµÂÊ¸ßÓÚÇ§·ÖÖ®Ò»(0.1%)ÎªÉ¸Ñ¡±ê×¼£¬µÃµ½Ã¿¸ö×éµÄOTU×éºÏ
+    awk 'BEGIN{OFS=FS="\t"}{if(FNR==1) {for(i=2;i<=NF;i++) a[i]=$i;} \
+        else {for(i=2;i<=NF;i++) if($i>0.1) print $1, a[i];}}' \
+        result/otutab_mean.txt > result/alpha/otu_group_exist.txt
+    head result/alpha/otu_group_exist.txt
+    # ½á¹û¿ÉÒÔÖ±½ÓÔÚhttp://www.ehbio.com/ImageGP»æÖÆVenn¡¢upSetViewºÍSanky
+
+
+## 7. Beta¶àÑùĞÔ Beta diversity
+
+    #½á¹ûÓĞ¶à¸öÎÄ¼ş£¬ĞèÒªÄ¿Â¼
+    mkdir -p result/beta/
+    #»ùÓÚOTU¹¹½¨½ø»¯Ê÷ Make OTU tree, 30s
+    time ${db}/win/usearch -cluster_agg result/otus.fa -treeout result/otus.tree
+    #Éú³É5ÖÖ¾àÀë¾ØÕó£ºbray_curtis, euclidean, jaccard, manhatten, unifrac, 3s
+    time ${db}/win/usearch -beta_div result/otutab_rare.txt -tree result/otus.tree \
+      -filename_prefix result/beta/ # 1s
+
+
+## 8. ÎïÖÖ×¢ÊÍ½á¹û·ÖÀà»ã×Ü Taxonomy summary
+
+    #OTU¶ÔÓ¦ÎïÖÖ×¢ÊÍ2ÁĞ¸ñÊ½£ºÈ¥³ısintaxÖĞÖÃĞÅÖµ£¬Ö»±£ÁôÎïÖÖ×¢ÊÍ£¬Ìæ»»:Îª_£¬É¾³ıÒıºÅ
+    cut -f 1,4 result/otus.sintax \
+      |sed 's/\td/\tk/;s/:/__/g;s/,/;/g;s/"//g;s/\/Chloroplast//' \
+      > result/taxonomy2.txt
+    head -n3 result/taxonomy2.txt
+
+    #OTU¶ÔÓ¦ÎïÖÖ8ÁĞ¸ñÊ½£º×¢Òâ×¢ÊÍÊÇ·ÇÕûÆë
+    #Éú³ÉÎïÖÖ±í¸ñOTU/ASVÖĞ¿Õ°×²¹ÆëÎªUnassigned
+    awk 'BEGIN{OFS=FS="\t"}{delete a; a["k"]="Unassigned";a["p"]="Unassigned";a["c"]="Unassigned";a["o"]="Unassigned";a["f"]="Unassigned";a["g"]="Unassigned";a["s"]="Unassigned";\
+      split($2,x,";");for(i in x){split(x[i],b,"__");a[b[1]]=b[2];} \
+      print $1,a["k"],a["p"],a["c"],a["o"],a["f"],a["g"],a["s"];}' \
+      result/taxonomy2.txt > temp/otus.tax
+    sed 's/;/\t/g;s/.__//g;' temp/otus.tax|cut -f 1-8 | \
+      sed '1 s/^/OTUID\tKingdom\tPhylum\tClass\tOrder\tFamily\tGenus\tSpecies\n/' \
+      > result/taxonomy.txt
+    head -n3 result/taxonomy.txt
+
+    #Í³¼ÆÃÅ¸ÙÄ¿¿ÆÊô£¬Ê¹ÓÃ rank²ÎÊı p c o f g£¬Îªphylum, class, order, family, genusËõĞ´
+    mkdir -p result/tax
+    for i in p c o f g;do
+      ${db}/win/usearch -sintax_summary result/otus.sintax \
+      -otutabin result/otutab_rare.txt -rank ${i} \
+      -output result/tax/sum_${i}.txt
+    done
+    sed -i 's/(//g;s/)//g;s/\"//g;s/\#//g;s/\/Chloroplast//g' result/tax/sum_*.txt
+    # ÁĞ³öËùÓĞÎÄ¼ş
+    ls -sh result/tax/sum_*.txt
+    head -n3 result/tax/sum_g.txt
+
+
+## 9. ÓĞ²Î±È¶Ô¡ª¡ª¹¦ÄÜÔ¤²â£¬ÈçGreengene£¬¿ÉÓÃÓÚpicurst, bugbase·ÖÎö
+
+    mkdir -p result/gg/
+    #ÓëGGËùÓĞ97% OTUs±È¶Ô£¬ÓÃÓÚ¹¦ÄÜÔ¤²â
+
+    #·½·¨1. usearch±È¶Ô¸ü¿ì£¬µ«ÎÄ¼ş³¬ÏŞ±¨´íÑ¡·½·¨2
+    time ${db}/win/usearch -otutab temp/filtered.fa -otus ${db}/gg/97_otus.fasta \
+    	-otutabout result/gg/otutab.txt -threads 4
+    #79.9%, 4ºËÊ±8m
+    head -n3 result/gg/otutab.txt
+
+    # #·½·¨2. vsearch±È¶Ô£¬¸ü×¼µ«¸üÂı£¬µ«²¢ĞĞ¸üÇ¿
+    # time ${db}/win/vsearch --usearch_global temp/filtered.fa --db ${db}/gg/97_otus.fasta \
+    #   --otutabout result/gg/otutab.txt --id 0.97 --threads 12
+    #80.9%, 12cores 20m, 1core 1h, 594Mb
+
+    #Í³¼Æ
+    ${db}/win/usearch -otutab_stats result/gg/otutab.txt -output result/gg/otutab.stat
+    cat result/gg/otutab.stat
+
+
+## 10. ¿Õ¼äÇåÀí¼°Êı¾İÌá½»
+
+    #É¾³ıÖĞ¼ä´óÎÄ¼ş
+    rm -rf temp/*.fq
+    #Ô­Ê¼Êı¾İ¼°Ê±Ñ¹Ëõ½ÚÊ¡¿Õ¼ä²¢ÉÏ´«Êı¾İÖĞĞÄ±¸·İ, 54s
+    gzip seq/*
+
+    # ·ÖË«¶ËÍ³¼Æmd5Öµ£¬ÓÃÓÚÊı¾İÌá½»
+    cd seq
+    md5sum *_1.fq.gz > md5sum1.txt
+    md5sum *_2.fq.gz > md5sum2.txt
+    paste md5sum1.txt md5sum2.txt | awk '{print $2"\t"$1"\t"$4"\t"$3}' | sed 's/*//g' > ../result/md5sum.txt
+    rm md5sum*
+    cd ..
+    cat result/md5sum.txt
+
+
+
+# 23¡¢RÓïÑÔ¶àÑùĞÔºÍÎïÖÖ·ÖÎö
+
+
+## 1. Alpha¶àÑùĞÔ
+
+### 1.1 Alpha¶àÑùĞÔÏäÏßÍ¼
+    # ²é¿´°ïÖú
+    Rscript ${db}/script/alpha_boxplot.R -h
+    # ÍêÕû²ÎÊı£¬¶àÑùĞÔÖ¸Êı¿ÉÑ¡richness chao1 ACE shannon simpson invsimpson
+    Rscript ${db}/script/alpha_boxplot.R --alpha_index richness \
+      --input result/alpha/vegan.txt --design result/metadata.tsv \
+      --group Group --output result/alpha/ \
+      --width 89 --height 59
+    # Ê¹ÓÃÑ­»·»æÖÆ6ÖÖ³£ÓÃÖ¸Êı
+    for i in `head -n1 result/alpha/vegan.txt|cut -f 2-`;do
+      Rscript ${db}/script/alpha_boxplot.R --alpha_index ${i} \
+        --input result/alpha/vegan.txt --design result/metadata.tsv \
+        --group Group --output result/alpha/ \
+        --width 89 --height 59
+    done
+
+### 1.2 Ï¡ÊÍÇúÏß
+    Rscript ${db}/script/alpha_rare_curve.R \
+      --input result/alpha/alpha_rare.txt --design result/metadata.tsv \
+      --group Group --output result/alpha/ \
+      --width 89 --height 59
+
+### 1.3 ¶àÑùĞÔÎ¬¶÷Í¼
+    # Èı×é±È½Ï:-fÊäÈëÎÄ¼ş,-a/b/c/d/g·Ö×éÃû,-w/uÎª¿í¸ßÓ¢´ç,-pÊä³öÎÄ¼şÃûºó×º
+    bash ${db}/script/sp_vennDiagram.sh \
+      -f result/alpha/otu_group_exist.txt \
+      -a WT -b KO -c OE \
+      -w 3 -u 3 \
+      -p WT_KO_OE
+    # ËÄ×é±È½Ï£¬Í¼ºÍ´úÂë¼ûÊäÈëÎÄ¼şÄ¿Â¼£¬ÔËĞĞÄ¿Â¼Îªµ±Ç°ÏîÄ¿¸ùÄ¿Â¼
+    bash ${db}/script/sp_vennDiagram.sh \
+      -f result/alpha/otu_group_exist.txt \
+      -a WT -b KO -c OE -d All \
+      -w 3 -u 3 \
+      -p WT_KO_OE_All
+
+## 2. Beta¶àÑùĞÔ
+
+### 2.1 ¾àÀë¾ØÕóÈÈÍ¼pheatmap
+    # ÒÔbray_curtisÎªÀı£¬-fÊäÈëÎÄ¼ş,-hÊÇ·ñ¾ÛÀàTRUE/FALSE,-u/vÎª¿í¸ßÓ¢´ç
+    bash ${db}/script/sp_pheatmap.sh \
+      -f result/beta/bray_curtis.txt \
+      -H 'TRUE' -u 5 -v 5
+    # Ìí¼Ó·Ö×é×¢ÊÍ£¬Èç2£¬4ÁĞµÄ»ùÒòĞÍºÍµØµã
+    cut -f 1-2 result/metadata.tsv > temp/group.txt
+    # -PÌí¼ÓĞĞ×¢ÊÍÎÄ¼ş£¬-QÌí¼ÓÁĞ×¢ÊÍ
+    bash ${db}/script/sp_pheatmap.sh \
+      -f result/beta/bray_curtis.txt \
+      -H 'TRUE' -u 8.9 -v 5.6 \
+      -P temp/group.txt -Q temp/group.txt
+    # ¾àÀë¾ØÕóÓëÏà¹ØÀàËÆ£¬¿É³¢ÊÔcorrplot»òggcorrplot»æÖÆ¸ü¶àÑùÊ½
+    # - [»æÍ¼Ïà¹ØÏµÊı¾ØÕócorrplot](http://mp.weixin.qq.com/s/H4_2_vb2w_njxPziDzV4HQ)
+    # - [Ïà¹Ø¾ØÕó¿ÉÊÓ»¯ggcorrplot](http://mp.weixin.qq.com/s/AEfPqWO3S0mRnDZ_Ws9fnw)
+
+### 2.2 Ö÷×ø±ê·ÖÎöPCoA
+    # ÊäÈëÎÄ¼ş£¬Ñ¡Ôñ·Ö×é£¬Êä³öÎÄ¼ş£¬Í¼Æ¬³ß´çmm£¬Í³¼Æ¼ûbeta_pcoa_stat.txt
+    Rscript ${db}/script/beta_pcoa.R \
+      --input result/beta/bray_curtis.txt --design result/metadata.tsv \
+      --group Group --output result/beta/bray_curtis.txt.pcoa.pdf \
+      --width 89 --height 59
+
+### 2.3 ÏŞÖÆĞÔÖ÷×ø±ê·ÖÎöCPCoA
+    Rscript ${db}/script/beta_cpcoa.R \
+      --input result/beta/bray_curtis.txt --design result/metadata.tsv \
+      --group Group --output result/beta/bray_curtis.txt.cpcoa.pdf \
+      --width 89 --height 59
+
+## 3. ÎïÖÖ×é³ÉTaxonomy
+
+### 3.1 ¶ÑµşÖù×´Í¼Stackplot
+    # ÒÔÃÅ(p)Ë®Æ½ÎªÀı£¬½á¹û°üÀ¨output.sample/group.pdfÁ½¸öÎÄ¼ş
+    Rscript ${db}/script/tax_stackplot.R \
+      --input result/tax/sum_p.txt --design result/metadata.tsv \
+      --group Group --output result/tax/sum_p.stackplot \
+      --legend 5 --width 89 --height 59
+    # ÅúÁ¿»æÖÆÊäÈë°üÀ¨p/c/o/f/g¹²5¼¶
+    for i in p c o f g; do
+    Rscript ${db}/script/tax_stackplot.R \
+      --input result/tax/sum_${i}.txt --design result/metadata.tsv \
+      --group Group --output result/tax/sum_${i}.stackplot \
+      --legend 8 --width 89 --height 59; done
+
+### 3.2 ÏÒÍ¼(È¦Í¼)circlize
+    # ÒÔ¸Ù(class,c)ÎªÀı£¬»æÖÆÇ°5×é
+    i=c
+    Rscript ${db}/script/tax_circlize.R \
+      --input result/tax/sum_${i}.txt --design result/metadata.tsv \
+      --group Group --legend 5
+    # ½á¹ûÎ»ÓÚµ±Ç°Ä¿Â¼circlize.pdf(Ëæ»úÑÕÉ«)£¬circlize_legend.pdf(Ö¸¶¨ÑÕÉ«+Í¼Àı)
+    # ÒÆ¶¯²¢¸ÄÃûÓë·ÖÀà¼¶Ò»ÖÂ
+    mv circlize.pdf result/tax/sum_${i}.circlize.pdf
+    mv circlize_legend.pdf result/tax/sum_${i}.circlize_legend.pdf
+
+### 3.3 Ê÷Í¼treemap/maptree
+    # ¶à²ã¼¶°üº¬ÎïÖÖ¹ØÏµ£¬ÊäÈëÌØÕ÷±íºÍÎïÖÖ×¢ÊÍ£¬Êä³öÊ÷Í¼£¬Ö¸¶¨°üº¬ÌØÕ÷ÊıÁ¿ºÍÍ¼Æ¬¿í¸ß
+    Rscript ${db}/script/tax_maptree.R \
+      --input result/otutab.txt --taxonomy result/taxonomy.txt \
+      --output result/tax/tax_maptree.pdf \
+      --topN 200 --width 183 --height 118
+
+# 24¡¢²îÒì±È½Ï
+
+## 24-1. RÓïÑÔ²îÒì·ÖÎö
+
+### 1.1 ²îÒì±È½ÏDifference comparison
+    mkdir -p result/compare/
+    # ÊäÈëÌØÕ÷±í¡¢ÔªÊı¾İ£»Ö¸¶¨·Ö×éÁĞÃû¡¢±È½Ï×éºÍ·á¶È
+    # Ñ¡Ôñ·½·¨wilcox/t.test/edgeR¡¢pvalueºÍfdrºÍÊä³öÄ¿Â¼
+    compare="KO-WT"
+    Rscript ${db}/script/compare.R \
+      --input result/otutab.txt --design result/metadata.tsv \
+      --group Group --compare ${compare} --threshold 0.1 \
+      --method edgeR --pvalue 0.05 --fdr 0.2 \
+      --output result/compare/
+
+### 1.2 »ğÉ½Í¼
+    # ÊäÈëcompare.RµÄ½á¹û£¬Êä³ö»ğÉ½Í¼´øÊı¾İ±êÇ©£¬¿ÉÖ¸¶¨Í¼Æ¬´óĞ¡
+    Rscript ${db}/script/compare_volcano.R \
+      --input result/compare/${compare}.txt \
+      --output result/compare/${compare}.txt.volcano.pdf
+      --width 89 --height 59
+
+### 1.3 ÈÈÍ¼
+    # ÊäÈëcompare.RµÄ½á¹û£¬É¸Ñ¡ÁĞÊı£¬Ö¸¶¨ÔªÊı¾İºÍ·Ö×é¡¢ÎïÖÖ×¢ÊÍ£¬Í¼´óĞ¡Ó¢´çºÍ×ÖºÅ
+    bash ${db}/script/compare_heatmap.sh -i result/compare/${compare}.txt -l 7 \
+       -d result/metadata.tsv -A Group \
+       -t result/taxonomy.txt \
+       -w 8 -h 5 -s 7 \
+       -o result/compare/${compare}.txt
+
+### 1.4 Âü¹ş¶ÙÍ¼
+    # i²îÒì±È½Ï½á¹û,tÎïÖÖ×¢ÊÍ,pÍ¼Àı,w¿í,v¸ß,s×ÖºÅ,lÍ¼Àı×î´óÖµ
+    bash ${db}/script/compare_manhattan.sh -i result/compare/${compare}.txt \
+       -t result/taxonomy.txt \
+       -p result/tax/sum_p.txt \
+       -w 183 -v 59 -s 7 -l 10 \
+       -o result/compare/${compare}
+    # ÉÏÍ¼Ö»ÓĞ6¸öÃÅ£¬ÇĞ»»Îª¸ÙcºÍ-L ClassÕ¹Ê¾Ï¸½Ú
+    bash ${db}/script/compare_manhattan.sh -i result/compare/${compare}.txt \
+       -t result/taxonomy.txt \
+       -p result/tax/sum_c.txt \
+       -w 130 -v 59 -s 7 -l 10 -L Class \
+       -o result/compare/${compare}.txt
+
+## 24-2. STAMPÊäÈëÎÄ¼ş×¼±¸
+
+### 2.1 ÃüÁîĞĞÉú³ÉÊäÈëÎÄ¼ş
+    Rscript ${db}/script/format2stamp.R -h
+    mkdir -p result/stamp
+    Rscript ${db}/script/format2stamp.R --input result/otutab.txt \
+      --taxonomy result/taxonomy.txt --threshold 0.1 \
+      --output result/stamp/tax
+
+### 2.2 RmdÉú³ÉÊäÈëÎÄ¼ş
+    #1. 24compare/stampÄ¿Â¼ÖĞ×¼±¸otutab.txtºÍtaxonomy.txtÎÄ¼ş£»
+    #2. Rstudio´ò¿ªformat2stamp.Rmd£¬ÉèÖÃ²ÎÊı£»
+    #3. µã»÷KnitÔÚµ±Ç°Ä¿Â¼Éú³ÉstampÊäÈëÎÄ¼şºÍ¿ÉÖØ¸´¼ÆËãÍøÒ³¡£
+
+
+## 24-3. LEfSeÊäÈëÎÄ¼ş×¼±¸
+
+### 3.1. ÃüÁîĞĞÉú³ÉÎÄ¼ş
+
+    # ¿ÉÑ¡ÃüÁîĞĞÉú³ÉÊäÈëÎÄ¼ş
+    Rscript ${db}/script/format2lefse.R -h
+    Rscript ${db}/script/format2lefse.R --input result/otutab.txt \
+      --taxonomy result/taxonomy.txt --design result/metadata.tsv \
+      --group Group --threshold 0.1 \
+      --output result/LEfSe
+
+### 3.2 RmdÉú³ÉÊäÈëÎÄ¼ş
+    #1. 24Compare/LEfSeÄ¿Â¼ÖĞ×¼±¸otutab.txt, metadata.tsv, taxonomy.txtÈı¸öÎÄ¼ş£»
+    #2. Rstudio´ò¿ªformat2lefse.Rmd²¢KnitÉú³ÉÊäÈëÎÄ¼şºÍ¿ÉÖØ¸´¼ÆËãÍøÒ³£»
+
+### 3.3 LEfSe·ÖÎö
+    #·½·¨1. ´ò¿ªLEfSe.txt²¢ÔÚÏßÌá½» http://www.ehbio.com/ImageGP/index.php/Home/Index/LEFSe.html
+    #·½·¨2. LEfSe±¾µØ·ÖÎö(ÏŞLinux·şÎñÆ÷¡¢Ñ¡Ñ§)£¬²Î¿¼´úÂë¼û¸½Â¼
+    #·½·¨3. LEfSe¹ÙÍøÔÚÏßÊ¹ÓÃ
+
+
+
+# 25¡¢QIIME 2·ÖÎöÁ÷³Ì
+    # ´úÂëÏê¼û 25QIIME2/pipeline_qiime2.sh
+
+
+
+# 31¡¢¹¦ÄÜÔ¤²â
+
+
+## 1. PICRUSt¹¦ÄÜÔ¤²â
+
+    # ÍÆ¼öÊ¹ÓÃ http://www.ehbio.com/ImageGP ÔÚÏß·ÖÎö gg/otutab.txt
+    # È»ºó½á¹ûÊ¹ÓÃSTAMP/R½øĞĞ²îÒì±È½Ï
+    # ÓĞLinux·şÎñÆ÷ÓÃ»§¿É²Î¿¼¸½Â¼2´úÂë´î½¨±¾µØÁ÷³Ì
+
+## 2. ÔªËØÑ­»·FAPROTAX
+
+    ## ·½·¨1. ÔÚÏß·ÖÎö£¬ÍÆ¼öÊ¹ÓÃ http://www.ehbio.com/ImageGP ÔÚÏß·ÖÎö
+    ## ·½·¨2. LinuxÏÂ·ÖÎö¡¢Ñ¡Ñ§£¬Ïê¼û¸½Â¼3
+
+## 3. BugbaseÏ¸¾ú±íĞÍÔ¤²â
+
+
+### 1. BugbaseÃüÁîĞĞ·ÖÎö
+    bugbase=${db}/script/BugBase
+    rm -rf result/bugbase/
+    Rscript ${bugbase}/bin/run.bugbase.r -L ${bugbase} \
+      -i result/gg/otutab.txt -m result/metadata.tsv -c Group -o result/bugbase/
+
+### 2. ÆäËü¿ÉÓÃ·ÖÎö
+    # Ê¹ÓÃ http://www.ehbio.com/ImageGP
+    # ¹ÙÍø£¬https://bugbase.cs.umn.edu/ £¬ÓĞ±¨´í£¬²»ÍÆ¼ö
+    # BugbaseÏ¸¾ú±íĞÍÔ¤²âLinux£¬Ïê¼û¸½Â¼4. BugbaseÏ¸¾ú±íĞÍÔ¤²â
+
+
+
+# 33¡¢MachineLearning»úÆ÷Ñ§Ï°
+
+    # RandomForest°üÊ¹ÓÃµÄR´úÂë¼û33MachineLearningÄ¿Â¼ÖĞµÄRF_classificationºÍRF_regression
+    ## Silme2Ëæ»úÉ­ÁÖ/AdaboostÊ¹ÓÃ´úÂë¼û33MachineLearningÄ¿Â¼ÖĞµÄslime2£¬»ò¸½Â¼5
+
+
+# 34. Evolution½ø»¯Ê÷
+
+    cd ${wd}
+    mkdir -p result/tree
+    cd ${wd}/result/tree
+
+## 1. É¸Ñ¡¸ß·á¶È¡¢Ö¸¶¨ASVĞòÁĞ
+
+    #·½·¨1. °´·á¶ÈÉ¸Ñ¡£ºÉ¸Ñ¡Ê÷¸ß·á¶ÈOTU£¬Ò»°ãÑ¡0.001»ò0.005£¬ÇÒOTUÊıÁ¿ÔÚ30-150¸ö·¶Î§ÄÚ
+    #Í³¼ÆOTU±íÖĞOTUÊıÁ¿£¬Èç×Ü¼Æ2631¸ö
+    tail -n+2 ../otutab_rare.txt | wc -l
+    #°´Ïà¶Ô·á¶È0.2%É¸Ñ¡¸ß·á¶ÈOTU
+    ${db}/win/usearch -otutab_trim ../otutab_rare.txt \
+        -min_otu_freq 0.002 \
+        -output otutab.txt
+    #Í³¼ÆÉ¸Ñ¡OTU±íÌØÕ÷ÊıÁ¿£¬×Ü¼Æ80¸ö
+    tail -n+2 otutab.txt | wc -l
+    #ÌáÈ¡IDÓÃÓÚÌáÈ¡ĞòÁĞ
+    cut -f 1 otutab.txt | sed '1 s/#OTU ID/OTUID/' > otutab_high.id
+
+    #·½·¨2. °´ÊıÁ¿É¸Ñ¡
+    #°´·á¶ÈÅÅĞò£¬Ä¬ÈÏÓÉ´óµ½Ğ¡
+    ${db}/win/usearch -otutab_sortotus ../otutab_rare.txt  \
+        -output otutab_sort.txt
+    #ÌáÈ¡¸ß·á¶ÈÖĞÖ¸¶¨TopÊıÁ¿µÄOTU ID£¬ÈçTop100,
+    sed '1 s/#OTU ID/OTUID/' otutab_sort.txt \
+        | head -n101 > otutab.txt
+    cut -f 1 otutab.txt > otutab_high.id
+
+    #É¸Ñ¡¸ß·á¶È¾ú/Ö¸¶¨²îÒì¾ú¶ÔÓ¦OTUĞòÁĞ
+    ${db}/win/usearch -fastx_getseqs ../otus.fa -labels otutab_high.id \
+        -fastaout otus.fa
+    head -n 2 otus.fa
+
+    ## É¸Ñ¡OTU¶ÔÎïÖÖ×¢ÊÍ
+    awk 'NR==FNR{a[$1]=$0} NR>FNR{print a[$1]}' ../taxonomy.txt \
+        otutab_high.id > otutab_high.tax
+
+    #»ñµÃOTU¶ÔÓ¦×é¾ùÖµ£¬ÓÃÓÚÑù±¾ÈÈÍ¼
+    #ÒÀÀµÖ®Ç°otu_mean.R¼ÆËã¹ı°´Group·Ö×éµÄ¾ùÖµ
+    awk 'NR==FNR{a[$1]=$0} NR>FNR{print a[$1]}' ../otutab_mean.txt otutab_high.id \
+        | sed 's/#OTU ID/OTUID/' > otutab_high.mean
+    head -n3 otutab_high.mean
+
+    #ºÏ²¢ÎïÖÖ×¢ÊÍºÍ·á¶ÈÎª×¢ÊÍÎÄ¼ş
+    cut -f 2- otutab_high.mean > temp
+    paste otutab_high.tax temp > annotation.txt
+    head -n 3 annotation.txt
+
+
+## 2. ¹¹½¨½ø»¯Ê÷
+
+    # ÆğÊ¼ÎÄ¼şÎª result/treeÄ¿Â¼ÖĞ otus.fa(ĞòÁĞ)¡¢annotation.txt(ÎïÖÖºÍÏà¶Ô·á¶È)ÎÄ¼ş
+    # MuscleÈí¼ş½øĞĞĞòÁĞ¶ÔÆë£¬3s
+	  time muscle -in otus.fa -out otus_aligned.fas
+
+    ### ·½·¨1. ÀûÓÃIQ-TREE¿ìËÙ¹¹½¨ML½ø»¯Ê÷£¬2m
+    mkdir -p iqtree
+    time ${db}/win/iqtree -s otus_aligned.fas \
+        -bb 1000 -redo -alrt 1000 -nt AUTO \
+        -pre iqtree/otus
+
+    ### ·½·¨2. FastTree¿ìËÙ½¨Ê÷(Linux)
+    # ×¢ÒâFastTreeÈí¼şÊäÈëÎÄ¼şÎªfasta¸ñÊ½µÄÎÄ¼ş£¬¶ø²»ÊÇÍ¨³£ÓÃµÄPhylip¸ñÊ½¡£Êä³öÎÄ¼şÊÇNewick¸ñÊ½¡£
+    # ¸Ã·½·¨ÊÊºÏÓÚ´óÊı¾İ£¬ÀıÈç¼¸°Ù¸öOTUsµÄÏµÍ³·¢ÓıÊ÷£¡
+    # UbuntuÉÏ°²×°fasttree¿ÉÒÔÊ¹ÓÃ`apt install fasttree`
+    # fasttree -gtr -nt otus_aligned.fa > otus.nwk
+
+
+## 3. ½ø»¯Ê÷ÃÀ»¯
+
+    # ·ÃÎÊhttp://itol.embl.de/£¬ÉÏ´«otus.nwk£¬ÔÙÍÏ×§ÏÂ·½Éú³ÉµÄ×¢ÊÍ·½°¸ÓÚÊ÷ÉÏ¼´ÃÀ»¯
+
+    ## ·½°¸1. ÍâÈ¦ÑÕÉ«¡¢ĞÎ×´·ÖÀàºÍ·á¶È·½°¸
+    # annotation.txt OTU¶ÔÓ¦ÎïÖÖ×¢ÊÍºÍ·á¶È£¬
+    # -a ÕÒ²»µ½ÊäÈëÁĞ½«ÖÕÖ¹ÔËĞĞ£¨Ä¬ÈÏ²»Ö´ĞĞ£©-c ½«ÕûÊıÁĞ×ª»»Îªfactor»ò¾ßÓĞĞ¡ÊıµãµÄÊı×Ö£¬-t Æ«ÀëÌáÊ¾±êÇ©Ê±×ª»»IDÁĞ£¬-w ÑÕÉ«´ø£¬ÇøÓò¿í¶ÈµÈ£¬ -DÊä³öÄ¿Â¼£¬-i OTUÁĞÃû£¬-l OTUÏÔÊ¾Ãû³ÆÈçÖÖ/Êô/¿ÆÃû£¬
+    # cd ${wd}/result/tree
+    Rscript ${db}/script/table2itol.R -a -c double -D plan1 -i OTUID -l Genus -t %s -w 0.5 annotation.txt
+    # Éú³É×¢ÊÍÎÄ¼şÖĞÃ¿ÁĞÎªµ¥¶ÀÒ»¸öÎÄ¼ş
+
+    ## ·½°¸2. Éú³É·á¶ÈÖùĞÎÍ¼×¢ÊÍÎÄ¼ş
+    Rscript ${db}/script/table2itol.R -a -d -c none -D plan2 -b Phylum -i OTUID -l Genus -t %s -w 0.5 annotation.txt
+
+    ## ·½°¸3. Éú³ÉÈÈÍ¼×¢ÊÍÎÄ¼ş
+    Rscript ${db}/script/table2itol.R -c keep -D plan3 -i OTUID -t %s otutab.txt
+
+    ## ·½°¸4. ½«ÕûÊı×ª»¯³ÉÒò×ÓÉú³É×¢ÊÍÎÄ¼ş
+    Rscript ${db}/script/table2itol.R -a -c factor -D plan4 -i OTUID -l Genus -t %s -w 0 annotation.txt
+
+    # ·µ»Ø¹¤×÷Ä¿Â¼
+    cd ${wd}
+
+
+# ¸½Â¼£ºLinux·şÎñÆ÷ÏÂ·ÖÎö(Ñ¡Ñ§)
+
+    #×¢£ºWindowsÏÂ¿ÉÄÜÎŞ·¨ÔËĞĞÒÔÏÂ´úÂë£¬ÍÆ¼öÔÚLinuxÏÂconda°²×°Ïà¹Ø³ÌĞò
+
+## 1. LEfSe·ÖÎö
+
+    mkdir -p ~/amplicon/24Compare/LEfSe
+    cd ~/amplicon/24Compare/LEfSe
+    # format2lefse.Rmd´úÂëÖÆ×÷»òÉÏ´«ÊäÈëÎÄ¼şLEfSe.txt
+    # °²×°lefse
+    # conda install lefse
+
+    #¸ñÊ½×ª»»ÎªlefseÄÚ²¿¸ñÊ½
+    lefse-format_input.py LEfSe.txt input.in -c 1 -o 1000000
+    #ÔËĞĞlefse
+    run_lefse.py input.in input.res
+    #»æÖÆÎïÖÖÊ÷×¢ÊÍ²îÒì
+    lefse-plot_cladogram.py input.res cladogram.pdf --format pdf
+    #»æÖÆËùÓĞ²îÒìfeaturesÖù×´Í¼
+    lefse-plot_res.py input.res res.pdf --format pdf
+    #»æÖÆµ¥¸öfeaturesÖù×´Í¼(Í¬STAMPÖĞbarplot)
+    head input.res #²é¿´²îÒìfeaturesÁĞ±í
+    lefse-plot_features.py -f one --feature_name "Bacteria.Firmicutes.Bacilli.Bacillales.Planococcaceae.Paenisporosarcina" \
+       --format pdf input.in input.res Bacilli.pdf
+    #ÅúÁ¿»æÖÆËùÓĞ²îÒìfeaturesÖù×´Í¼£¬É÷ÓÃ(¼¸°ÙÕÅ²îÒì½á¹ûÖù×´Í¼ÔÄ¶ÁÒ²ºÜÀ§ÄÑ)
+    mkdir -p features
+    lefse-plot_features.py -f diff --archive none --format pdf \
+      input.in input.res features/
+
+
+## 2. PICRUSt¹¦ÄÜÔ¤²â
+
+    #ÍÆ¼öÊ¹ÓÃ http://www.ehbio.com/ImageGP ÔÚÏß·ÖÎö
+    #ÓĞLinux·şÎñÆ÷ÓÃ»§¿É²Î¿¼ÒÔÏÂ´úÂë´î½¨±¾µØÁ÷³Ì
+    cd ~/amplicon/result
+    mkdir -p picrust
+
+    # °²×°picurst
+
+    #ÉÏ´«gg/otutab.txtÖÁµ±Ç°Ä¿Â¼
+    #×ª»»ÎªOTU±íÍ¨ÓÃ¸ñÊ½£¬·½±ãÏÂÓÎ·ÖÎöºÍÍ³¼Æ
+    biom convert -i otutab.txt \
+        -o otutab.biom \
+        --table-type="OTU table" --to-json
+    #Ğ£Õı¿½±´Êı
+    normalize_by_copy_number.py -i otutab.biom \
+        -o otutab_norm.biom \
+        -c /db/picrust/16S_13_5_precalculated.tab.gz
+    #Ô¤²âºê»ùÒò×éKO±í£¬biom·½±ãÏÂÓÎ¹éÀà£¬txt·½±ã²é¿´·ÖÎö
+    predict_metagenomes.py -i otutab_norm.biom \
+        -o ko.biom \
+        -c /db/picrust/ko_13_5_precalculated.tab.gz
+    predict_metagenomes.py -f -i otutab_rare.biom \
+        -o ko.txt \
+        -c /db/picrust/ko_13_5_precalculated.tab.gz
+
+    #°´¹¦ÄÜ¼¶±ğ·ÖÀà»ã×Ü, -cÊä³öKEGG_Pathways£¬·Ö1-3¼¶
+    sed  -i '/#Constru/d;s/#OTU //' ko.txt
+    num=`tail -n1 ko.txt|wc -w`
+    for i in 1 2 3;do
+      categorize_by_function.py -f -i ko.biom -c KEGG_Pathways -l ${i} -o ko${i}.txt
+      sed  -i '/#Constru/d;s/#OTU //' ko${i}.txt
+      paste <(cut -f $num ko${i}.txt) <(cut -f 1-$[num-1] ko${i}.txt) > ko${i}.spf
+    done
+    wc -l ko*.spf
+
+
+## 3. FAPROTAXSÔªËØÑ­»·
+
+    cd amplicon/result/faprotax
+
+### 1. Èí¼ş°²×°
+
+    #ÏÂÔØÈí¼ş1.1°æ£¬ June 10, 2017¸üĞÂÊı¾İ¿â
+    wget -c https://pages.uoregon.edu/slouca/LoucaLab/archive/FAPROTAX/SECTION_Download/MODULE_Downloads/CLASS_Latest%20release/UNIT_FAPROTAX_1.2/FAPROTAX_1.2.zip
+    #½âÑ¹
+    unzip FAPROTAX_1.2.zip
+
+    #²âÊÔÊÇ·ñ¿ÉÔËĞĞ£¬µ¯³ö°ïÖú¼´Õı³£¹¤×÷
+    python FAPROTAX_1.2/collapse_table.py
+
+    #Èç¹û±¨´í£¬Ò»°ãÌáÊ¾È±ÉÙnumpy£¬¿ÉÊ¹ÓÃconda°²×°ÒÀÀµ°ü
+    conda install numpy
+    conda install biom
+
+### 2. ÖÆ×÷ÊäÈëOTU±í
+
+    #txt×ª»»Îªbiom json¸ñÊ½
+    biom convert -i otutab_rare.txt -o otutab_rare.biom --table-type="OTU table" --to-json
+    #Ìí¼ÓÎïÖÖ×¢ÊÍ
+    biom add-metadata -i otutab_rare.biom --observation-metadata-fp taxonomy2.txt \
+      -o otutab_rare_tax.biom --sc-separated taxonomy \
+      --observation-header OTUID,taxonomy
+    #Ö¸¶¨ÊäÈëÎÄ¼ş¡¢ÎïÖÖ×¢ÊÍ¡¢Êä³öÎÄ¼ş¡¢×¢ÊÍÁĞÃû¡¢ÊôĞÔÁĞÃû
+
+### 3. FAPROTAX¹¦ÄÜÔ¤²â
+
+    #pythonÔËĞĞcollapse_table.py½Å±¾¡¢ÊäÈë´øÓĞÎïÖÖ×¢ÊÍOTU±ítax.biom¡¢
+    #-gÖ¸¶¨Êı¾İ¿âÎ»ÖÃ£¬ÎïÖÖ×¢ÊÍÁĞÃû£¬Êä³ö¹ı³ÌĞÅÏ¢£¬Ç¿ÖÆ¸²¸Ç½á¹û£¬½á¹ûÎÄ¼şºÍÏ¸½Ú
+    #ÏÂÔØfaprotax.txt£¬ÅäºÏÊµÑéÉè¼Æ¿É½øĞĞÍ³¼Æ·ÖÎö
+    #faprotax_report.txt²é¿´Ã¿¸öÀà±ğÖĞ¾ßÌåÀ´Ô´ÄÄĞ©OTUs
+    python FAPROTAX_1.2/collapse_table.py -i otutab_rare_tax.biom \
+      -g FAPROTAX_1.2/FAPROTAX.txt \
+      --collapse_by_metadata 'taxonomy' -v --force \
+      -o faprotax.txt -r faprotax_report.txt
+
+### 4. ÖÆ×÷OTU¶ÔÓ¦¹¦ÄÜ×¢ÊÍÓĞÎŞ¾ØÕó
+
+    # ¶ÔOTU×¢ÊÍĞĞ£¬¼°Ç°Ò»ĞĞ±êÌâ½øĞĞÉ¸Ñ¡
+    grep 'ASV_' -B 1 faprotax_report.txt | grep -v -P '^--$' > faprotax_report.clean
+    # É¸Ñ¡Perl½Å±¾½«Êı¾İÕûÀíÎª±í¸ñ£¬ËÑË÷ÎÒµÄgithub(YongxinLiu)»ò32FAPROTAXÄ¿Â¼
+    ./faprotax_report_sum.pl -i faprotax_report.clean -o faprotax_report
+    # ²é¿´¹¦ÄÜÓĞÎŞ¾ØÕó£¬-S²»»»ĞĞ
+    less -S faprotax_report.mat
+
+## 4. BugbaseÏ¸¾ú±íĞÍÔ¤²â
+
+### 1. Èí¼ş°²×°(½öÒ»´Î)
+
+    #ÓĞÁ½ÖÖ·½·¨¿ÉÑ¡£¬ÍÆ¼öµÚÒ»ÖÖ£¬¿ÉÑ¡µÚ¶şÖÖ£¬½öĞèÔËĞĞÒ»´Î
+
+    #·½·¨1. gitÏÂÔØ£¬ĞèÒªÓĞgit
+    git clone https://github.com/knights-lab/BugBase
+
+    #·½·¨2. ÏÂÔØ²¢½âÑ¹
+    wget https://github.com/knights-lab/BugBase/archive/master.zip
+    mv master.zip BugBase.zip
+    unzip BugBase.zip
+    mv BugBase-master/ BugBase
+
+    #°²×°ÒÀÀµ°ü
+    cd BugBase
+    export BUGBASE_PATH=`pwd`
+    export PATH=$PATH:`pwd`/bin
+    #°²×°ÁËËùÓĞÒÀÀµ°ü
+    run.bugbase.r -h
+    #²âÊÔÊı¾İ
+    run.bugbase.r -i doc/data/HMP_s15.txt -m doc/data/HMP_map.txt -c HMPBODYSUBSITE -o output
+
+
+### 2. ×¼±¸ÊäÈëÎÄ¼ş
+
+    cd ~/amplicon/result
+    #ÊäÈëÎÄ¼ş£º»ùÓÚgreengene OTU±íµÄbiom¸ñÊ½(±¾µØ·ÖÎöÖ§³Ötxt¸ñÊ½ÎŞĞè×ª»»)ºÍmapping file(metadata.tsvÊ×ĞĞÌí¼Ó#)
+    #ÉÏ´«ÊµÑéÉè¼Æ+¸Õ²ÅÉú³ÉµÄotutab_gg.txt
+    #Éú³ÉÔÚÏß·ÖÎöÊ¹ÓÃµÄbiom1.0¸ñÊ½
+    biom convert -i gg/otutab.txt -o otutab_gg.biom --table-type="OTU table" --to-json
+    sed '1 s/^/#/' metadata.tsv > MappingFile.txt
+    #ÏÂÔØotutab_gg.biom ºÍ MappingFile.txtÓÃÓÚÔÚÏß·ÖÎö
+
+### 3. ±¾µØ·ÖÎö
+
+    export BUGBASE_PATH=`pwd`
+    export PATH=$PATH:`pwd`/bin
+    run.bugbase.r -i otutab_gg.txt -m MappingFile.txt -c Group -o phenotype/
+
+## 5. Silme2Ëæ»úÉ­ÁÖ/Adaboost
+
+    #ÏÂÔØ°²×°
+    cd ~/software/
+    wget https://github.com/swo/slime2/archive/master.zip
+    mv master.zip slime2.zip
+    unzip slime2.zip
+    mv slime2-master/ slime2
+    cp slime2/slime2.py ~/bin/
+    chmod +x ~/bin/slime2.py
+
+    #°²×°ÒÀÀµ°ü
+    sudo pip3 install --upgrade pip
+    sudo pip3 install pandas
+    sudo pip3 install sklearn
+
+    # Ê¹ÓÃÊµÕ½
+    cd 33MachineLearning/slime2
+    #Ê¹ÓÃadaboost¼ÆËã10000´Î(16.7s)£¬ÍÆ¼öÇ§Íò´Î
+    ./slime2.py otutab.txt design.txt --normalize --tag ab_e4 ab -n 10000
+    #Ê¹ÓÃRandomForest¼ÆËã10000´Î(14.5s)£¬ÍÆ¼ö°ÙÍò´Î£¬Ö§³Ö¶àÏß³Ì
+    ./slime2.py otutab.txt design.txt --normalize --tag rf_e4 rf -n 10000
+    cd ../../
+
+
+
+
+# ³£¼ûÎÊÌâ
+
+## 1. ÎÄ¼şphredÖÊÁ¿´íÎó¡ª¡ªFastqÖÊÁ¿Öµ64×ª33
+
+    #²é¿´64Î»¸ñÊ½ÎÄ¼ş£¬ÖÊÁ¿Öµ¶àÎªĞ¡Ğ´×ÖÄ¸
+    head -n4 FAQ/Q64Q33/test_64.fq
+    #×ª»»ÖÊÁ¿Öµ64±àÂë¸ñÊ½Îª33
+    vsearch --fastq_convert FAQ/Q64Q33/test_64.fq \
+        --fastqout FAQ/test.fq \
+        --fastq_ascii 64 --fastq_asciiout 33
+    #²é¿´×ª»»ºó33±àÂë¸ñÊ½£¬ÖÊÁ¿Öµ¶àÎª´óĞ´×ÖÄ¸
+    head -n4 FAQ/test.fq
+
+## 2. ĞòÁĞË«¶ËÒÑ¾­ºÏ²¢¡ª¡ªµ¥¶ËĞòÁĞÖØÃüÃû/Ìí¼ÓÑù±¾Ãû
+
+    #²é¿´ÎÄ¼şĞòÁĞÃû
+    head -n1 FAQ/test.fq
+    #ĞòÁĞ°´Ñù±¾ÃüÃû£¬²¢Êä³öµ½ĞÂÎÄ¼ş¼Ğ
+    mkdir -p FAQ/relabel
+    vsearch --fastq_convert FAQ/test.fq \
+        --fastqout FAQ/relabel/WT1.fq --relabel WT1.
+    #²é¿´×ª»»ºó33±àÂë¸ñÊ½£¬ÖÊÁ¿Öµ¶àÎª´óĞ´×ÖÄ¸
+    head -n1 FAQ/relabel/WT1.fq
+
+## 3. Êı¾İ¹ı´óÎŞ·¨Ê¹ÓÃusearch¾ÛÀà»òÈ¥Ôë-vsearch
+
+    #±¸Ñ¡vsearchÉú³ÉOTU£¬µ«ÎŞ×Ô¶¯de novoÈ¥Ç¶ºÏ¹¦ÄÜ
+    #½öÏŞusearchÃâ·Ñ°æÊÜÏŞÊ±(¿ÉÍ¨¹ıÌá¸ßminuniquesize²ÎÊı¼õÉÙÊı¾İÁ¿)Ê¹ÓÃ£¬²»ÍÆ¼ö
+    #ÖØÃüÃû¡¢ÏàËÆ97%£¬²»ÆÁ±Î£¬ÊäÈëºÍÊä³öcount
+    vsearch --cluster_size temp/uniques.fa  \
+     --centroids temp/otus.fa \
+     --relabel OTU_ --id 0.97 --qmask none --sizein --sizeout
+    #5s Clusters: 1062
+    #vsearch»¹ĞèÁ¬ÓÃ--uchime3_denovo
+
+
+## 4. Reads countÕûÊıÖµÈçºÎ±ê×¼»¯ÎªÏà¶Ô·á¶È
+
+    #ÇóÈ¡¸÷¸öOTUÔÚ¶ÔÓ¦ÑùÆ·µÄ·á¶ÈÆµÂÊ
+    usearch -otutab_counts2freqs result/otutab_rare.txt \
+        -output result/otutab_rare_freq.txt
+
+## 5. ÔËĞĞRÌáÊ¾write.table Permission denied
+
+    #ÀıÈç±¨´íĞÅÏ¢Ê¾ÀıÈçÏÂ£º
+    Error in file(file, ifelse(append, "a", "w")) :
+    Calls: write.table -> file
+    : Warning message:
+    In file(file, ifelse(append, "a", "w")) :
+      'result/raw/otutab_nonBac.txt': Permission denied
+    #·­ÒëÎªĞ´ÈëÎÄ¼şÎŞÈ¨ÏŞ£¬Ò»°ãÎªÄ¿±êÎÄ¼şÕıÔÚ±»´ò¿ª£¬Çë¹Ø±ÕÖØÊÔ
+
+## 6. ÎÄ¼şÅúÁ¿ÃüÃû
+
+    # ×¢ÒâĞŞ¸ÄÂ·¾¶
+    cd /c/project/seq
+    ls > ../filelist.txt
+    # ±à¼­ÁĞ±í£¬µÚ¶şÃûÎª×îÖÕÃüÃû£¬È·¶¨Ãû³ÆÎ¨Ò»
+    # ¼ì²éÊÖ¶¯ÃüÃûÊÇ·ñÎ¨Ò»
+    cut -f 2 ../filelist.txt |wc -l
+    cut -f 2 ../filelist.txt | sort | uniq |wc -l
+    # Èç¹ûÁ½´Î½á¹ûÒ»ÖÂ£¬ÔòÃüÃû·ÇÈßÓà
+    awk '{system("mv "$1" "$2)}' ../filelist.txt
+
+## 7. RstudioÖĞTerminalÕÒ²»µ½LinuxÃüÁî
+
+    # ĞèÒª°Ñ C:\Program Files\Git\usr\bin Ä¿Â¼Ìí¼Óµ½ÏµÍ³»·¾³±äÁ¿
+    # ×¢Òâwin10ÏµÍ³ÊÇÒ»¸öÄ¿Â¼Ò»ĞĞ£»win7ÖĞ¶à¸öÄ¿Â¼ÓÃ·ÖºÅ·Ö¸ô£¬×¢ÒâÏòºóÌí¼ÓÄ¿Â¼
+
+
+## 8. ²âÊÔ¾ùÖµ¶ªÊ§×é
+    cd /c/amplicon/FAQ/merge
+    #°´×éÇó¾ùÖµ£¬Ğè¸ù¾İÊµÑéÉè¼Æmetadata.txtĞŞ¸Ä×éÁĞÃû
+    #ÊäÈëÎÄ¼şÎªfeautre±íresult/otutab.txt£¬ÊµÑéÉè¼Æmetadata.txt
+    #Êä³öÎªÌØÕ÷±í°´×éµÄ¾ùÖµ-Ò»¸öÊµÑé¿ÉÄÜÓĞ¶àÖÖ·Ö×é·½Ê½
+    Rscript /c/amplicon/22Pipeline/script/otu_mean.R
+
+    #ÈçÒÔÆ½¾ù·á¶ÈÆµÂÊ¸ßÓÚ0.05%ÎªÉ¸Ñ¡±ê×¼£¬µÃµ½Ã¿¸ö×éµÄOTU×éºÏ
+    awk 'BEGIN{OFS=FS="\t"}{if(FNR==1) {for(i=2;i<=NF;i++) a[i]=$i;} \
+        else {for(i=2;i<=NF;i++) if($i>0.05) print $1, a[i];}}' \
+        result/otutab_mean_Genotype.txt > alpha/otu_group_exist.txt
+    # ½á¹û¿ÉÒÔÖ±½ÓÔÚhttp://www.ehbio.com/ImageGP»æÖÆVenn¡¢upSetViewºÍSanky
+
+## 9. usearch/vsearch Éú³ÉOTU±íÊ±ÎŞ·¨Æ¥Åä
+    #ÊÇÔ­Ê¼ĞòÁĞ·½Ïò´íÎó£¬½«ĞòÁĞĞèÒªÈ¡·´Ïò»¥²¹
+    vsearch --fastx_revcomp ../FAQ/filtered_test.fa \
+      --fastaout ../FAQ/filtered_test_RC.fa
+    # ÔÙ·ÖÎö
+    usearch -otutab ../FAQ/filtered_test_RC.fa -otus db/gg/97_otus.fasta \
+    	-otutabout gg/otutab.txt -threads 6
+
+## 10. ¼ì²éÎÄ¼şwindows»»ĞĞ·ûºÍÉ¾³ı
+
+    cd /c/amplicon/FAQ/190614_ITS_taxSum_0field
+  	i=g
+    usearch -sintax_summary sintax.txt \
+    -otutabin otutab_rare.txt \
+    -rank ${i} \
+    -output sum_${i}.txt
